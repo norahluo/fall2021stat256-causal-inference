@@ -1,0 +1,18 @@
+"0","```r
+library(reshape)
+allvar2014 <- var2014 %>% select(c('GEOID', 'variable', 'estimate')) %>% 
+            cast(GEOID~variable) 
+```"
+"1","Using estimate as value column.  Use the value argument to cast to override this choice
+"
+"0","```r
+colnames(allvar2014) <- c('GEOID', 'Pop', 'White', 'EmpPop', 'TransCom', 'WalkCom', 'HseHld', 'Pop25', 'Bechalor25', 'Master25', 'Doctoral25', 'Units', 'NovehOwn', 'NovehRent')
+
+# calculate # of high education and household w/out vehicles
+allvar2014 <- allvar2014 %>% mutate(
+    NoVeh = NovehOwn + NovehRent,
+    HighEdu = Bechalor25+Master25+Doctoral25
+    ) %>%
+  select(c(GEOID, Pop, White, EmpPop, TransCom, WalkCom, HseHld, HighEdu, NoVeh, Pop25, Units))
+
+```"

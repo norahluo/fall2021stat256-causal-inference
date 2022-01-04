@@ -1,0 +1,8 @@
+"0","library(factoextra)"
+"2","package ‘factoextra’ was built under R version 4.0.5"
+"2","Welcome! Want to learn more? See two factoextra-related books at https://goo.gl/ve3WBa
+"
+"0","mobility0818 <- c('retailrec_2021-08-18',  'park_2021-08-18', 'transit_2021-08-18',  'workplace_2021-08-18',  'residential_2021-08-18',  'gropharmacy_2021-08-18')"
+"0",""
+"0","res.pca <- prcomp(data[,mobility0818], scale = TRUE)"
+"0","fviz_eig(res.pca)"

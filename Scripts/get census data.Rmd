@@ -1,0 +1,760 @@
+---
+title: "Census data"
+author: "Qianhua"
+date: "11/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r cars}
+library(tidycensus)
+library(censusapi)
+library(reshape)
+library(tidyverse)
+library(readxl)
+library(data.table)
+```
+### Get 2019 census data ###
+```{r pressure, echo=FALSE}
+census_api_key('f838d12c30c4f22f460094b38e3a76e5dcd8c3f9', overwrite = TRUE, install = TRUE)
+readRenviron('~/.Renviron')
+Sys.getenv('CENSUS_API_KEY')
+```
+```{r}
+#View(load_variables(2019, "acs5"))
+var2019 <- get_acs(geography = 'state',
+              variables = c(population = 'B01001_001', 
+                            ppl = 'B17001_001', ppl_poverty = 'B17001_002',
+                            male = 'B01001_002', female = 'B01001_026', 
+                            hsehld = 'B17017_001', hsehld_poverty = 'B17017_002', 
+                            medIncome = 'B19326_001', 
+                            medAge = 'B01002_001',
+                            male65 = 'B01001_020', male67 = 'B01001_021', male70 = 'B01001_022', male75 = 'B01001_023', male80 = 'B01001_024', male85 = 'B01001_025',
+                            female65 = 'B01001_044', female67 = 'B01001_045', female70 = 'B01001_046', female75 = 'B01001_047', female80 = 'B01001_048', female85 = 'B01001_049',
+                            white = 'B02008_001', black_african = 'B02009_001', asian = 'B02011_001', hispanic_latino = 'B03001_003'),
+              year = 2019, 
+              survey = 'acs5')
+
+allvar2019 <- var2019 %>% select(c('NAME', 'variable', 'estimate')) %>% cast(NAME~variable)
+
+allvar2019 <- allvar2019 %>% mutate(
+  malepct = male/population,
+  femalepct = female/population,
+  over65pct = (male65 + male67 + male70 + male75 + male80 + male85 + female65 + female67 + female70 + female75 + female80 + female85)/population,
+  pplpovpct = ppl_poverty/ppl,
+  hsepovpct = hsehld_poverty/hsehld,
+  whitepct = white/population,
+  blkafrpct = black_african/population,
+  asianpct = asian/population,
+  hislatpct = hispanic_latino/population
+) %>% select(c('NAME', 'over65pct', 'pplpovpct', 'hsepovpct', 'whitepct', 'blkafrpct', 'asianpct', 'hislatpct', 'medIncome', 'medAge', 'population'))
+```
+
+```{r}
+write.csv(allvar2019, '../Data/census2019.csv')
+```
+
+### End census section ###
+
+```{r, read data}
+census2019 <- read.csv('../Data/census2019.csv')[-1]
+confirm2021 <- read.csv('../Data/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv')
+death2021 <- read.csv('../Data/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv')
+totaltest <- read.csv('../Data/Vaccination/data_tables/testing_data/time_series_covid19_US.csv')
+totalvax <- read.csv('../Data/Vaccination/data_tables/vaccine_data/us_data/time_series/people_vaccinated_us_timeline.csv')
+state_characteristic <- read_excel('../Data/State characteristics.xlsx', col_types = c('text', 'text', 'numeric', 'numeric', 'date', 'numeric','numeric', 'numeric')) %>% 
+  select(c(-3)) %>%
+  mutate(mask_mandate_school = ifelse(SchoolMask < '2000-01-01', 0, 1 ))
+
+mobility <- read.csv('../Data/2021_US_Region_Mobility_Report.csv') %>%
+  filter(str_detect(iso_3166_2_code, 'US-')) %>%
+  filter(date %in% c('2021-08-02', '2021-08-18', '2021-08-25', '2021-09-01', '2021-09-08', '2021-09-15', '2021-09-22', 
+                     '2021-10-01', '2021-10-16', '2021-10-31')) %>%
+  select(c(3, 9:15)) %>%
+  rename('state' = 'sub_region_1', 
+         'retailrec' = 'retail_and_recreation_percent_change_from_baseline',
+         'gropharmacy' = 'grocery_and_pharmacy_percent_change_from_baseline',
+         'park' = 'parks_percent_change_from_baseline',
+         'transit' = 'transit_stations_percent_change_from_baseline',
+         'workplace' = 'workplaces_percent_change_from_baseline',
+         'residential' = 'residential_percent_change_from_baseline') 
+mobility <- dcast(setDT(mobility), state~date, value.var = c('retailrec', 'park','transit','workplace','residential', 'gropharmacy'))
+
+
+
+```
+
+```{r, compile independent variables}
+confirm2021 <- confirm2021[, c(7, 12:666)] %>% 
+  group_by(Province_State) %>%
+  summarise(across(everything(), sum)) %>%
+  select(c(1,456:656)) %>%
+  mutate(growth7 = X9.8.21/X9.1.21,
+         growth14 = X9.15.21/X9.1.21,
+         growth21 = X9.22.21/X9.1.21,
+         growth30 = X10.1.21/X9.1.21,
+         growth45 = X10.16.21/X9.1.21,
+         growth60 = X10.31.21/X9.1.21,)
+
+death2021 <- death2021[, c(7, 12:667)] %>% 
+  group_by(Province_State) %>%
+  summarise(across(everything(), sum)) %>%
+  select(c(1,2,457:657))
+
+vaxStatus <- totalvax %>% 
+  filter(Date %in% c('2021-08-02', '2021-08-18', '2021-08-25', '2021-09-01', '2021-09-08', '2021-09-15', '2021-09-22', 
+                     '2021-10-01', '2021-10-16', '2021-10-31')) %>%
+  select(c(Province_State, Date, People_Fully_Vaccinated)) %>%
+  cast(Province_State~Date) %>% 
+  rename('fullvax30' = '2021-08-02', 'fullvax14' ='2021-08-18', 'fullvax7' = '2021-08-25',
+         'fullvax0' = '2021-09-01', 'fullvax7+' ='2021-09-08', 'fullvax14+' = '2021-09-15',
+         'fullvax21+' = '2021-09-22', 'fullvax30+' ='2021-10-01', 'fullvax45+' = '2021-10-16', 'fullvax60+' = '2021-10-31') %>%
+  merge(
+totalvax %>% 
+  filter(Date %in% c('2021-08-02', '2021-08-18', '2021-08-25', '2021-09-01', '2021-09-08', '2021-09-15', '2021-09-22', 
+                     '2021-10-01', '2021-10-16', '2021-10-31')) %>%
+  select(c(Province_State, Date, People_Partially_Vaccinated)) %>%
+  cast(Province_State~Date) %>%
+  rename('partialvax30' = '2021-08-02', 'partialvax14' ='2021-08-18', 'partialvax7' = '2021-08-25', 
+         'partialvax0' = '2021-09-01', 'partialvax7+' ='2021-09-08', 'partialvax14+' = '2021-09-15',
+         'partialvax21+' = '2021-09-22', 'partialvax30+' ='2021-10-01', 'partialvax45+' = '2021-10-16', 'partialvax60+' = '2021-10-31') 
+       )
+
+totaltest <- totaltest %>% 
+  filter(date %in% c('8/2/2021', '8/18/2021', '8/25/2021', '9/1/2021', '9/8/2021', '9/15/2021',  '9/22/2021', '10/1/2021', '10/16/2021', '10/31/2021')) %>%
+  select(c(state, tests_viral_total, date)) %>%
+  cast(state~date, value = 'tests_viral_total') %>%
+  rename('test_pre30' = '8/2/2021', 'test_pre14' ='8/18/2021', 'test_pre7' = '8/25/2021', 
+         'test_9/1' = '9/1/2021', 'test_pro7' ='9/8/2021', 'test_pro14' = '9/15/2021',
+         'test_pro21' = '9/22/2021', 'test_pro30' ='10/1/2021', 'test_pro45' = '10/16/2021', 'test_pro60' = '10/31/2021')
+
+state_characteristic <- merge(state_characteristic, death2021[, c(1,2)], by.x = 'State', by.y = 'Province_State')
+state_characteristic$ppl_density = state_characteristic$Population/state_characteristic$`Square Miles`
+```
+
+```{r, compile data}
+data <- merge(census2019, state_characteristic[, c(1,2,4,5,6,7,8,9,10)], by.x = 'NAME', by.y = 'State') %>% 
+  merge(mobility, by.x = 'NAME', by.y = 'state') %>%
+  merge(confirm2021[, c(1,106,122,129,203:208)], by.x = 'NAME', by.y = 'Province_State') %>%
+  merge(death2021[, c('Province_State', 'X8.25.21','X8.18.21','X8.2.21')], by.x = 'NAME', by.y = 'Province_State', suffixes = c('conf','death')) %>%
+  merge(vaxStatus, by.x = 'NAME', by.y = 'Province_State') %>% 
+  merge(totaltest, by.x = 'State Abbreviation', by.y = 'state') %>%
+  mutate(
+    fullvaxrate30 = fullvax30/Population,
+    fullvaxrate14 = fullvax14/Population,
+    fullvaxrate7 = fullvax7/Population,
+    partialvaxrate30 = partialvax30/Population,
+    partialvaxrate14 = partialvax14/Population,
+    partialvaxrate7 = partialvax7/Population
+  )
+data <- data[-8,] # remove DC
+data$MaskMandateLeastNonvax <- ifelse(data$MaskMandateAll == 1 | data$MaskMandateNonvax == 1, 1, 0)
+```
+
+```{r, PCA for mobility variables}
+library(factoextra)
+mobility0818 <- c('retailrec_2021-08-18',  'park_2021-08-18', 'transit_2021-08-18',  'workplace_2021-08-18',  'residential_2021-08-18',  'gropharmacy_2021-08-18')
+
+res.pca <- prcomp(data[,mobility0818], scale = TRUE)
+fviz_eig(res.pca)
+res.ind <- get_pca_ind(res.pca)
+data$mobility0818dim1 <- res.ind$coord[,1]   
+data$mobility0818dim2 <- res.ind$coord[,2]   
+
+mobility0825 <- c('retailrec_2021-08-25',  'park_2021-08-25', 'transit_2021-08-25',  'workplace_2021-08-25',  'residential_2021-08-25',  'gropharmacy_2021-08-25')
+
+res.pca <- prcomp(data[,mobility0825], scale = TRUE)
+fviz_eig(res.pca)
+res.ind <- get_pca_ind(res.pca)
+
+data$mobility0825dim1 <- res.ind$coord[,1]   
+data$mobility0825dim2 <- res.ind$coord[,2]  
+
+#fviz_pca_var(res.pca,
+#             col.var = "contrib", # Color by the quality of representation
+#             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+#             repel = TRUE     # Avoid text overlapping
+#             )
+```
+
+```{r}
+summary(data[covariates])
+sum(data$`Republican leading 2020`)
+sum(data$mask_mandate_school)
+
+summary(data[data$MaskMandateNonvax==1,covariates ])
+sum(data[data$MaskMandateNonvax==1,]$`Republican leading 2020`)
+sum(data[data$MaskMandateNonvax==1,]$mask_mandate_school)
+
+summary(data[data$MaskMandateNonvax==0,covariates ])
+sum(data[data$MaskMandateNonvax==0,]$`Republican leading 2020`)
+sum(data[data$MaskMandateNonvax==0,]$mask_mandate_school)
+```
+
+
+```{r, covariates}
+covariates <- c('growth7', 'growth14', 'growth30', 
+                'MaskMandateLeastNonvax', 'mask_mandate_school',
+                'over65pct', 'medAge', 'pplpovpct', 'hsepovpct', 'medIncome', 'whitepct', 'blkafrpct', 'asianpct', 'hislatpct', 
+                'ppl_density', 
+                'Republican leading 2020', 
+                'X8.2.21conf', 'X8.18.21conf', 'X8.25.21conf',
+                'X8.2.21death', 'X8.18.21death', 'X8.25.21death',
+                'fullvaxrate14', 'fullvaxrate7', 'partialvaxrate14', 'partialvaxrate7',
+                'retailrec_2021-08-18', 'retailrec_2021-08-25', 'park_2021-08-18', 'park_2021-08-25', 'transit_2021-08-18', 'transit_2021-08-25', 'workplace_2021-08-18', 'workplace_2021-08-25', 'residential_2021-08-18', 'residential_2021-08-25', 'gropharmacy_2021-08-18', 'gropharmacy_2021-08-25'
+                )
+
+corr <- cor(data[covariates])
+```
+
+###### Build Model ######
+
+### Outcome model
+```{r}
+library(glmnet)
+library(doParallel)
+library(snow)
+workers = makeCluster(4, type = 'SOCK')
+registerDoParallel(workers)
+
+coef_ <- list()
+count_ <- rep(0,36)
+for (i in 1:1000) {
+       cv = cv.glmnet(data.matrix(data[,covariates[-c(1,2,3)]]), y = data$growth14)
+       coefficient <- coef(cv, s = 'lambda.1se')
+       coef_[[i]] <- coefficient
+       count_ <- count_ + (coefficient != 0)
+}
+```
+
+```{r}
+count_
+#coef_
+```
+
+```{r}
+# linear model
+ols <- lm(growth14~ MaskMandateLeastNonvax + 
+          medAge + over65pct +
+          pplpovpct +
+          asianpct + blkafrpct + 
+          ppl_density +
+          `Republican leading 2020` +
+          X8.18.21death + 
+          fullvaxrate7 + 
+          `workplace_2021-08-25` + `residential_2021-08-25` 
+          , data = data)
+summary(ols)
+car::vif(ols)
+AIC(ols)
+
+
+#library(hcci)
+#HC(ols, method=3)
+library(sandwich)
+library(lmtest)
+coeftest(ols, vcov = vcovHC(ols, type = 'HC3'))
+```
+# Alternative 1: PCA on mobility
+```{r}
+# linear model
+ols <- lm(growth14~ MaskMandateLeastNonvax + 
+          medAge + over65pct +
+          pplpovpct +
+          asianpct + blkafrpct + 
+          ppl_density +
+          `Republican leading 2020` +
+          X8.18.21death + 
+          fullvaxrate7 + 
+          `mobility0825dim1` + `mobility0825dim2` 
+          , data = data)
+summary(ols)
+car::vif(ols)
+AIC(ols)
+
+library(sandwich)
+library(lmtest)
+
+
+coeftest(ols, vcov = vcovHC(ols, type = 'HC3'))
+
+
+```
+
+# Alternative 2: Random Forest
+
+```{r}
+covariates
+```
+
+```{r}
+treat <- data[data$MaskMandateLeastNonvax==1,]
+control <- data[data$MaskMandateLeastNonvax==0,]
+tau <- rep(0, 1000)
+for (i in 1:1000) {
+  rf1 <- randomForest(data.matrix(treat[,covariates[-c(1:5)]]), y = treat$growth14, na.action = na.omit)
+  rf0 <- randomForest(data.matrix(control[,covariates[-c(1:5)]]), y = control$growth14, na.action = na.omit)
+  tau[[i]] <- mean(predict(rf1, data[, -c(38, 112:121)])) - mean(predict(rf0, data[, -c(38, 112:121)]))
+}
+ggplot(mapping = aes(tau))+
+  geom_histogram() +
+  labs(x = 'Treatment effect', 
+       y = 'Count', 
+       title = 'Distribution of Average Causal Effect') +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+ggsave('../Output/plots/tau_outcomemodel.png', width = 8, height = 6)
+print(p)
+print(summary(tau))
+print(c(mean(tau)-1.96*sqrt(var(tau)), mean(tau)+1.96*sqrt(var(tau))))
+
+```
+
+
+
+# Propensity score weighting
+```{r}
+covariates[-c(1:5)]
+```
+
+
+```{r}
+covariates <- c('growth7', 'growth14', 'growth30', 
+                'MaskMandateLeastNonvax', 'mask_mandate_school',
+                'over65pct', 'medAge', 'pplpovpct', 'hsepovpct', 'medIncome', 'whitepct', 'blkafrpct', 'asianpct', 'hislatpct', 
+                'ppl_density', 
+                'Republican leading 2020', 
+                'X8.2.21conf', 'X8.18.21conf', 'X8.25.21conf',
+                'X8.2.21death', 'X8.18.21death', 'X8.25.21death',
+                'fullvaxrate14', 'fullvaxrate7', 'partialvaxrate14', 'partialvaxrate7',
+                'mobility0825dim1', 'mobility0825dim2', 'mobility0818dim1', 'mobility0818dim2'
+                )
+
+```
+
+
+
+```{r, propensity score weighting}
+library(randomForest)
+library(gmodels)
+library(ggplot2)
+rf <- randomForest(data.matrix(data[,covariates[-c(1:5)]]), y = as.factor(data$MaskMandateLeastNonvax), na.action = na.omit)
+CrossTable(data$MaskMandateLeastNonvax, predict(rf, data[, -c(38, 112:121)]))
+plot(rf)
+plot(rf$err.rate[,1], type = 'l')
+mean(rf$err.rate[,1])
+rf$confusion
+ggplot()+
+  geom_histogram(aes(x = rf$votes[data$MaskMandateLeastNonvax==0,2], fill = 'No Mandate', alpha = 0.1), bins = 10) +
+  geom_histogram(aes(x = rf$votes[data$MaskMandateLeastNonvax==1,2], fill = 'Mandate', alpha = 0.1), bins = 10) +    
+  scale_fill_manual(values = c('skyblue', 'orange'),
+                    name = 'Treatment Group', labels = c('Mandate', 'No Mandate')) +
+  labs(x = 'Propensity Score', 
+       y = 'Count', 
+       title = 'Distribution of estimated propensity score by group',
+       xlim = c(0.0001, 0.2)) +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+ggsave('../output/plots/estimated propensity score.png', width = 7, height = 5)
+
+
+
+```
+
+
+
+
+```{r, number of low ps locations to decide the bound}
+lowps005 <- rep(0, 1000)
+lowps0001 <- rep(0, 1000)
+ 
+for (i in 1:1000) {
+  rf <- randomForest(data.matrix(data[,covariates[-c(1:5)]]), y = as.factor(data$MaskMandateLeastNonvax), na.action = na.omit)
+  lowps005[[i]] <- sum(rf$votes[,2] < 0.05)
+  lowps0001[[i]] <- sum(rf$votes[,2] < 0.001)
+}
+summary(lowps0001)
+summary(lowps005)
+```
+
+```{r}
+### estimate treatment effect & try different lower bound of propensity score ###
+Z = data$MaskMandateLeastNonvax
+Y = data$growth14
+ps_head <- list()
+
+multirun<- function(LB, data){
+
+for (i in 1:1000) {
+  rf <- randomForest(data.matrix(data[,covariates[-c(1:5)]]), y = as.factor(data$MaskMandateLeastNonvax), na.action = na.omit)
+  ps = rf$votes[,2]
+  ps <- pmax(ps, LB)
+  ps_head[[i]] <- ps
+  tau[[i]] <- sum(Z*Y/sum(ps))/sum(Z/sum(ps))- sum((1-Z)*Y/(1 - ps))/sum((1 - Z)/(1 - ps))
+}
+  print(paste(Sys.time(), ':Done!', sep = ''))
+  
+  return(mean(tau))
+#p <- ggplot(mapping = aes(tau))+
+#  geom_histogram() +
+#  labs(x = 'Treatment effect', 
+#       y = 'Count', 
+#       title = paste('Distribution of Average Causal Effect (LB = ', LB, ')')) +
+#  theme(
+#        text=element_text(size = 14, family = 'serif', color = 'black'))
+#ggsave(plot = p, path ='../Output/plots', filename = paste('tau_lb', LB, '.png', sep = ''), width = 8, height = 6)
+#print(p)
+#print(summary(tau))
+#print(c(mean(tau)-1.96*sqrt(var(tau)), mean(tau)+1.96*sqrt(var(tau))))
+}
+
+multirun(LB = 0.05)
+multirun(LB = 0.001)
+
+library(doParallel)
+library(snow)
+workers = makeCluster(4, type = 'SOCK')
+registerDoParallel(workers)
+
+n.sample = nrow(data)
+boot.est_psw = replicate(500, 
+                     {id.boot = sample(1:n.sample, n.sample, replace = TRUE)
+                     multirun(LB = 0.05, data = data[id.boot,])})
+```
+
+```{r}
+ggplot(mapping = aes(na.omit(boot.est_psw)))+
+  geom_histogram() +
+  labs(x = 'Average Causal Effect', 
+       y = 'Count', 
+       title = 'Boostrap result') +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+ggsave('../output/plots/pscore bootstrap.png', width = 7, height = 5)
+
+mean(na.omit(boot.est_psw))
+sqrt(var(na.omit(boot.est_psw)))
+
+boot.est_psw
+```
+# Assessing covariate balance
+```{r}
+
+tau_psw <- function(z, x, ps){
+  #print(z*x/ps)
+  tau <- sum(z*x/sum(ps))/sum(z/sum(ps))- sum((1-z)*x/(1 - ps))/sum((1 - z)/(1 - ps))
+  return(tau)
+}
+
+covariates <- c('growth7', 'growth14', 'growth30', 
+                'MaskMandateLeastNonvax', 'mask_mandate_school',
+                'over65pct', 'medAge', 'pplpovpct', 'hsepovpct', 'medIncome', 'whitepct', 'blkafrpct', 'asianpct', 'hislatpct', 
+                'ppl_density', 
+                'Republican leading 2020', 
+                'X8.2.21conf', 'X8.18.21conf', 'X8.25.21conf',
+                'X8.2.21death', 'X8.18.21death', 'X8.25.21death',
+                'fullvaxrate14', 'fullvaxrate7', 'partialvaxrate14', 'partialvaxrate7',
+                'mobility0825dim1', 'mobility0825dim2', 'mobility0818dim1', 'mobility0818dim2'
+                )
+
+point.est <- rep(0, 30)
+sd.err <- rep(0, 30)
+
+for (i in c(6:30)) {
+  
+  z <- data$MaskMandateLeastNonvax
+  x <- data[,covariates[i]]
+  ps <- apply(data.frame(ps_head), mean, MARGIN = c(1))
+  n.sample = nrow(data)
+  boot.est = replicate(500, 
+                     {id.boot = sample(1:n.sample, n.sample, replace = TRUE)
+                     tau_psw(z[id.boot], x[id.boot], ps[id.boot])})
+  point.est[[i]] <- mean(boot.est)
+  sd.err[[i]] <- sqrt(var(boot.est))
+}
+
+
+bl <- data.frame('covariates' = covariates, 'coef' = point.est, 'sd' = sd.err)[-c(1:5),]
+bl[-c(2,5,10,12,13,14,15,16,17),]
+
+library(ggplot2)
+ggplot(bl[-c(2,5,10,12,13,14,15,16,17,22,23,24,25),], aes(x=covariates, y=coef)) + 
+    geom_errorbar(aes(ymin=coef-1.96*sd, ymax=coef+1.96*sd), width=.3) +
+    theme(axis.text.x = element_text(angle = 45),
+          text=element_text(size = 14, family = 'serif', color = 'black')) +
+    labs(y = 'ACE', 
+         title = 'Boostrap result') +
+    geom_point()
+ggsave('../Output/plots/balance check1.png', width = 8, height = 4)
+
+ggplot(bl[c(2,22,23,24,25),], aes(x=covariates, y=coef)) + 
+    geom_errorbar(aes(ymin=coef-1.96*sd, ymax=coef+1.96*sd), width=.3) +
+    theme(axis.text.x = element_text(angle = 30),
+          text=element_text(size = 14, family = 'serif', color = 'black')) +
+  labs(y = 'ACE', 
+         title = 'Boostrap result') +
+    geom_point()
+ggsave('../Output/plots/balance check2.png', width = 8, height = 3)
+
+bl[c(2,5,10,22,23,24,25),]
+
+  
+ggplot(bl[c(12,13,14,15,16,17, 5),], aes(x=covariates, y=coef)) + 
+    geom_errorbar(aes(ymin=coef-1.96*sd, ymax=coef+1.96*sd), width=.3) +
+    theme(axis.text.x = element_text(angle = 30),
+          text=element_text(size = 14, family = 'serif', color = 'black'))
+```
+
+```{r}
+bl
+
+
+```
+
+
+# Doubly robust
+
+```{r}
+covariates <- c('growth7', 'growth14', 'growth30', 
+                'MaskMandateLeastNonvax', 'mask_mandate_school',
+                'over65pct', 'medAge', 'pplpovpct', 'hsepovpct', 'medIncome', 'whitepct', 'blkafrpct', 'asianpct', 'hislatpct', 
+                'ppl_density', 
+                'Republican leading 2020', 
+                'X8.2.21conf', 'X8.18.21conf', 'X8.25.21conf',
+                'X8.2.21death', 'X8.18.21death', 'X8.25.21death',
+                'fullvaxrate14', 'fullvaxrate7', 'partialvaxrate14', 'partialvaxrate7',
+                'mobility0825dim1', 'mobility0825dim2', 'mobility0818dim1', 'mobility0818dim2'
+                )
+
+```
+
+```{r}
+dr <- function(data, delay) {
+outcome <- paste('growth', delay, sep='')
+# outcome
+Z = data$MaskMandateLeastNonvax
+Y = data[, outcome]
+f <- paste(outcome, '~ MaskMandateLeastNonvax + 
+          medAge + over65pct +
+          pplpovpct +
+          asianpct + blkafrpct + 
+          ppl_density +
+          `Republican leading 2020` +
+          X8.18.21death + 
+          fullvaxrate7 + 
+          mobility0825dim1 + mobility0825dim2', sep='')
+ols <- lm(formula = f, data = data)
+
+Y_head = predict(ols, data)
+res = Y - Y_head
+
+# pscore
+#ps_head <- list()
+
+#for (i in 1:1000) {
+  rf <- randomForest(data.matrix(data[,covariates[-c(1:5)]]), y = as.factor(data$MaskMandateLeastNonvax), na.action = na.omit)
+#  ps_head[[i]] <- pmax(rf$votes[,2], 0.05)
+#}
+
+# doubly robust
+#pscore <- apply(data.frame(ps_head), mean, MARGIN = c(1))
+pscore <- pmax(rf$votes[,2], 0.05)
+#outcome1 = predict(ols, data[data$MaskMandateLeastNonvax==1, ]) 
+#outcome0 = predict(ols, data[data$MaskMandateLeastNonvax==0, ]) 
+#tau = mean(outcome1 - outcome0) + mean(Z*res/pscore - (1-Z)*res/(1-pscore))
+#return(tau)
+
+outcome1 = mean(Y_head + Z*res/pscore)
+outcome0 = mean(Y_head + (1-Z)*res/(1-pscore))
+tau = mean(outcome1 - outcome0)
+return(c(outcome1, outcome0, tau))
+
+}
+
+```
+
+```{r}
+library(doParallel)
+library(snow)
+workers = makeCluster(4, type = 'SOCK')
+registerDoParallel(workers)
+
+n.sample = nrow(data)
+
+point.30 <- dr(data, 30)
+boot.30 = replicate(500, 
+                     {id.boot = sample(1:n.sample, n.sample, replace = TRUE)
+                     dr(data = data[id.boot,], 30)})
+
+
+
+point.14 <- dr(data, 14)
+boot.14 = replicate(500, 
+                     {id.boot = sample(1:n.sample, n.sample, replace = TRUE)
+                     dr(data = data[id.boot,], 14)})
+
+
+
+point.7 <- dr(data, 7)
+boot.7 = replicate(500, 
+                     {id.boot = sample(1:n.sample, n.sample, replace = TRUE)
+                     dr(data = data[id.boot,], 7)})
+
+se.7 <- apply(boot.7[,-c(73,328, 393, 349, 365, 424)], 1, sd)
+point.7 
+point.7 - 1.96 * se.7
+point.7 + 1.96 * se.7
+
+se.14 <- apply(boot.14[,-c(231,227,293)], 1, sd)
+point.14
+point.14 - 1.96 * se.14
+point.14 + 1.96 * se.14
+
+se.30 <- apply(boot.30[,-c(454, 101)], 1, sd)
+point.30
+point.30 - 1.96 * se.30
+point.30 + 1.96 * se.30
+
+point.7/se.7
+point.14/se.14
+point.30/se.30
+
+c(point.7[c(1,2)], point.14[c(1,2)])
+point.14
+se.14
+```
+
+```{r}
+gr <- data.frame('day' = c(7,7,14,14,30,30), 'Outcome' = c(point.7[c(1,2)], point.14[c(1,2)], point.30[c(1,2)]), 'sd' = c(se.7[c(1,2)], se.14[c(1,2)], se.30[c(1,2)]), 'Group' = c('treatment', 'control', 'treatment', 'control', 'treatment', 'control'))
+ggplot(gr, aes(x=day, y=Outcome, group = Group, colour = Group)) + 
+    geom_errorbar(aes(ymin=Outcome-1.96*sd, ymax=Outcome+1.96*sd), width=.3) +
+    theme(axis.text.x = element_text(angle = 45),
+          text=element_text(size = 14, family = 'serif', color = 'black')) +
+    labs(y = 'Growth Rate', 
+         title = 'Influence of mask mandate') +
+    geom_line() +
+    geom_point()
+ggsave('../Output/plots/Growth rate across days.png', width = 8, height = 4)
+```
+
+
+```{r}
+gr <- data.frame('day' = c(7,14,30), 'ACE' = c(point.7[c(3)], point.14[c(3)], point.30[c(3)]),  'sd' = c(se.7[c(3)], se.14[c(3)], se.30[c(3)]))
+ggplot(gr, aes(x=day, y=ACE)) + 
+    geom_errorbar(aes(ymin=ACE-1.96*sd, ymax=ACE+1.96*sd), width=.3) +
+    theme(axis.text.x = element_text(angle = 45),
+          text=element_text(size = 14, family = 'serif', color = 'black')) +
+    labs(y = 'ACE', 
+         title = 'Influence of mask mandate') +
+    geom_line() +
+    geom_point()
+ggsave('../Output/plots/ACE across days.png', width = 8, height = 4)
+```
+
+```{r}
+
+ggplot(mapping = aes(boot.est[!is.na(boot.est)]))+
+  geom_histogram() +
+  labs(x = 'Average Causal Effect', 
+       y = 'Count', 
+       title = 'Boostrap result') +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+
+mean(na.omit(boot.est))
+sqrt(var(na.omit(boot.est)))
+```
+
+```{r}
+ggplot(mapping = aes(boot.est[!is.na(boot.est)]))+
+  geom_histogram() +
+  labs(x = 'Average Causal Effect', 
+       y = 'Count', 
+       title = 'Boostrap result') +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+
+mean(na.omit(boot.est))
+sqrt(var(na.omit(boot.est)))
+```
+
+
+
+
+```{r}
+ggplot(mapping = aes(boot.est[!is.na(boot.est)]))+
+  geom_histogram() +
+  labs(x = 'Average Causal Effect', 
+       y = 'Count', 
+       title = 'Boostrap result') +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+
+mean(na.omit(boot.est))
+sqrt(var(na.omit(boot.est)))
+```
+
+
+```{r}
+ggplot(mapping = aes(boot.est))+
+  geom_histogram() +
+  labs(x = 'Average Causal Effect', 
+       y = 'Count', 
+       title = 'Boostrap result') +
+  theme(
+        text=element_text(size = 14, family = 'serif', color = 'black'))
+ggsave('../output/plots/doubly robust bootstrap.png', width = 7, height = 5)
+
+mean(boot.est)
+sqrt(var(boot.est))
+```
+
+```{r}
+gr <- data.frame('Approach' = c('Linear','Hajek','Doubly robust'), 'ACE' = c(-0.00987,-0.00420, -0.00537), 'sd' = c(0.00972, 0.00379, 0.00406))
+ggplot(gr, aes(x=Approach, y=`ACE`)) + 
+    geom_errorbar(aes(ymin=ACE-1.96*sd, ymax=ACE+1.96*sd), width=.3) +
+    theme(axis.text.x = element_text(angle = 0),
+          text=element_text(size = 14, family = 'serif', color = 'black')) +
+    labs(y = 'ACE', 
+         title = 'Influence of mask mandate') +
+    geom_line() +
+    geom_point()
+ggsave('../Output/plots/ACE across approches.png', width = 8, height = 4)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

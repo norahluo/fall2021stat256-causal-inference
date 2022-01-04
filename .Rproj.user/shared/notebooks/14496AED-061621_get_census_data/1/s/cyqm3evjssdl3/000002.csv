@@ -1,0 +1,5 @@
+"0","```r
+var2009 <- tidycensus::load_variables(2009, 'acs5', TRUE)
+# For 2009-2011, need to use above index to calculate percentage of ppl with a bachelor's degree or higher
+var2009[var2009$name %in% c('B15002_015', 'B15002_016', 'B15002_018', 'B15002_032', 'B15002_033', 'B15002_035'),]
+```"

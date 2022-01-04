@@ -1,0 +1,20 @@
+"0","library(randomForest)
+"
+"2","package ‘randomForest’ was built under R version 4.0.5"
+"2","randomForest 4.6-14
+"
+"2","Type rfNews() to see new features/changes/bug fixes.
+"
+"0","library(gmodels)"
+"2","package ‘gmodels’ was built under R version 4.0.5"
+"0","library(ggplot2)"
+"2","package ‘ggplot2’ was built under R version 4.0.5"
+"2","
+Attaching package: ‘ggplot2’
+
+"
+"2","The following object is masked from ‘package:randomForest’:
+
+    margin
+
+"

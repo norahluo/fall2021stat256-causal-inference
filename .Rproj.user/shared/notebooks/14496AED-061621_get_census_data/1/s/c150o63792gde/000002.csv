@@ -1,0 +1,21 @@
+"0","```r
+# calculate the variables for overlapped area
+loc2012 <- overlap_area[overlap_area$year == 2012,] %>% merge(allvar2014, by = 'GEOID') %>%
+  mutate(
+    PopH = Pop * pctbgH, PopQ = Pop * pctbgQ, PopT = Pop * pctbgT,
+    WhiteH = White * pctbgH, WhiteQ = White * pctbgQ, WhiteT = White * pctbgT,
+    TransComH = TransCom * pctbgH, TransComQ = TransCom * pctbgQ, TransComT = TransCom * pctbgT,
+    WalkComH = WalkCom * pctbgH, WalkComQ = WalkCom * pctbgQ, WalkComT = WalkCom * pctbgT,
+    HseHldH = HseHld * pctbgH, HseHldQ = HseHld * pctbgQ, HseHldT = HseHld * pctbgT,
+    EmpPopH = EmpPop * pctbgH, EmpPopQ = EmpPop * pctbgQ, EmpPopT = EmpPop * pctbgT,
+    HighEduH = HighEdu * pctbgH, HighEduQ = HighEdu * pctbgQ, HighEduT = HighEdu * pctbgT,
+    NoVehH = NoVeh * pctbgH, NoVehQ = NoVeh * pctbgQ, NoVehT = NoVeh * pctbgT,
+    Pop25H = Pop25 * pctbgH, Pop25Q = Pop25 * pctbgQ, Pop25T = Pop25 * pctbgT,
+    UnitsH = Units * pctbgH, UnitsQ = Units * pctbgQ, UnitsT = Units * pctbgT,
+  ) 
+
+# aggregate across all the overlaps.
+loc2012 <- aggregate(c(loc2012[,17:46]), by = list(loc2012$count_id), FUN='sum') %>% rename(ID = Group.1)
+```"
+"1","Error in rename(., ID = Group.1) : unused argument (ID = Group.1)
+"

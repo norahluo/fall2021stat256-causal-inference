@@ -1,0 +1,3 @@
+"0","summary(subdata$EmpT)"
+"2","Error in summary(subdata$EmpT) : object 'subdata' not found
+"

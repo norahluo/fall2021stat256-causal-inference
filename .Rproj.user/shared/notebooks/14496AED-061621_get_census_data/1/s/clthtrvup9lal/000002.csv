@@ -1,0 +1,38 @@
+"0","```r
+loc2016 <- overlap_area[overlap_area$year == 2016,] %>% merge(allvar2018, by = 'GEOID') %>%
+    mutate( # calculate for overlapped area
+    PopH = Pop * pctbgH, PopQ = Pop * pctbgQ, PopT = Pop * pctbgT,
+    WhiteH = White * pctbgH, WhiteQ = White * pctbgQ, WhiteT = White * pctbgT,
+    TransComH = TransCom * pctbgH, TransComQ = TransCom * pctbgQ, TransComT = TransCom * pctbgT,
+    WalkComH = WalkCom * pctbgH, WalkComQ = WalkCom * pctbgQ, WalkComT = WalkCom * pctbgT,
+    HseHldH = HseHld * pctbgH, HseHldQ = HseHld * pctbgQ, HseHldT = HseHld * pctbgT,
+    EmpPopH = EmpPop * pctbgH, EmpPopQ = EmpPop * pctbgQ, EmpPopT = EmpPop * pctbgT,
+    HighEduH = HighEdu * pctbgH, HighEduQ = HighEdu * pctbgQ, HighEduT = HighEdu * pctbgT,
+    NoVehH = NoVeh * pctbgH, NoVehQ = NoVeh * pctbgQ, NoVehT = NoVeh * pctbgT,
+    Pop25H = Pop25 * pctbgH, Pop25Q = Pop25 * pctbgQ, Pop25T = Pop25 * pctbgT,
+    UnitsH = Units * pctbgH, UnitsQ = Units * pctbgQ, UnitsT = Units * pctbgT,
+  ) 
+
+
+loc2016 <- aggregate(c(loc2016[,17:46]), by = list(loc2016$count_id), FUN='sum') %>% dplyr::rename(ID = Group.1)
+
+loc2016$WhitePctH <- loc2016$WhiteH/loc2016$PopH
+loc2016$WhitePctQ <- loc2016$WhiteQ/loc2016$PopQ
+loc2016$WhitePctT <- loc2016$WhiteT/loc2016$PopT
+
+loc2016$TransComPctH <- loc2016$TransComH/loc2016$EmpPopH
+loc2016$TransComPctQ <- loc2016$TransComQ/loc2016$EmpPopQ
+loc2016$TransComPctT <- loc2016$TransComT/loc2016$EmpPopT
+
+loc2016$WalkComPctH <- loc2016$WalkComH/loc2016$EmpPopH
+loc2016$WalkComPctQ <- loc2016$WalkComQ/loc2016$EmpPopQ
+loc2016$WalkComPctT <- loc2016$WalkComT/loc2016$EmpPopT
+
+loc2016$HighEduPctH <- loc2016$HighEduH/loc2016$Pop25H
+loc2016$HighEduPctQ <- loc2016$HighEduQ/loc2016$Pop25Q
+loc2016$HighEduPctT <- loc2016$HighEduT/loc2016$Pop25T
+
+loc2016$NoVehPctH <- loc2016$NoVehH/loc2016$UnitsH
+loc2016$NoVehPctQ <- loc2016$NoVehQ/loc2016$UnitsQ
+loc2016$NoVehPctT <- loc2016$NoVehT/loc2016$UnitsT
+```"

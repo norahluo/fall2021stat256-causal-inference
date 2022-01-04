@@ -1,0 +1,32 @@
+"0","```r
+year <- read.csv('../data/PSIP3_DirectDemand_NewAnnualEst.csv') %>%
+        select(c('ID', 'year')) %>%
+        rename(count_id = ID)
+
+tenth <- read.csv('../data/census_tenth_results.csv') %>% 
+        filter(FID != '' & FID != 'FID') %>% 
+        mutate(pctbg_T = as.numeric(acres) / (as.numeric(ALAND) * 0.0002471052)) %>%
+        select(c('GEOID', 'count_id', 'pctbgT'))
+
+comment(tenth) <- 'T'
+
+quarter <- read.csv('../data/census_quarter_results.csv') %>% 
+        filter(FID != '' & FID != 'FID') %>% 
+        mutate(pctbg_Q = as.numeric(acres) / (as.numeric(ALAND) * 0.0002471052)) %>%
+        select(c('GEOID', 'count_id', 'pctbgQ'))
+
+comment(quarter) <- 'Q'
+
+half <- read.csv('../data/census_half_results.csv') %>% 
+        filter(FID != '' & FID != 'FID') %>% 
+        mutate(pctbg_H = as.numeric(acres) / (as.numeric(ALAND) * 0.0002471052)) %>%
+        select(c('GEOID', 'count_id', 'pctbgH'))
+
+comment(half) <- 'H'
+
+overlap_area <- half %>% merge(quarter, by = c('GEOID', 'count_id'), all.x = T) %>% 
+         merge(tenth, by = c('GEOID', 'count_id'), all.x = T) %>%
+         merge(year, by = 'count_id') %>%
+         replace(is.na(.), 0)
+
+```"

@@ -1,0 +1,6 @@
+"0","```r
+# Want to use 5-year ACS because 1-year ACS only has data available for geographic areas with ppl >= 65,000 while 5-year ACS data has been estimated down to census tract and block group levels.
+# However, 5-year ACS starts from 2005-2009. Therefore, for 2005 - 2007, use 2005-2009 estimates. For year > 2007, use the dataset with the middle point of the time span being that year
+
+year %>% group_by(year) %>% summarise(count = n())
+```"

@@ -1,0 +1,6 @@
+"0","library(factoextra)"
+"0","mobility0818 <- c('retailrec_2021-08-18',  'park_2021-08-18', 'transit_2021-08-18',  'workplace_2021-08-18',  'residential_2021-08-18',  'gropharmacy_2021-08-18')"
+"0",""
+"0","mobility0825 <- c('retailrec_2021-08-25',  'park_2021-08-25', 'transit_2021-08-25',  'workplace_2021-08-25',  'residential_2021-08-25',  'gropharmacy_2021-08-25')"
+"0","res.pca <- prcomp(data[,mobility0818], scale = TRUE)"
+"0","fviz_eig(res.pca)"

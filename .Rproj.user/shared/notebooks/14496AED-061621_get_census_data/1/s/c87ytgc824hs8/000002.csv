@@ -1,0 +1,9 @@
+"0","```r
+apis <- listCensusApis()
+View(apis)
+acs5_vars <- listCensusMetadata(
+  name = '2009/acs/acs5',
+  type = 'geography')
+
+
+```"

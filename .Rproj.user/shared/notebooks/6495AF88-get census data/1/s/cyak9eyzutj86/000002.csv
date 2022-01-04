@@ -1,0 +1,68 @@
+"0","library(tidycensus)"
+"0","library(censusapi)"
+"2","package ‘censusapi’ was built under R version 4.0.5"
+"2","
+Attaching package: ‘censusapi’
+
+"
+"2","The following object is masked from ‘package:methods’:
+
+    getFunction
+
+"
+"0","library(reshape)"
+"2","package ‘reshape’ was built under R version 4.0.5"
+"0","library(tidyverse)"
+"2","package ‘tidyverse’ was built under R version 4.0.5"
+"2","Registered S3 methods overwritten by 'dbplyr':
+  method         from
+  print.tbl_lazy     
+  print.tbl_sql      
+"
+"2","[30m-- [1mAttaching packages[22m -------------------------------------------------------------- tidyverse 1.3.1 --[39m
+"
+"2","[30m[32mv[30m [34mtibble [30m 3.1.2     [32mv[30m [34mdplyr  [30m 1.0.6
+[32mv[30m [34mtidyr  [30m 1.1.3     [32mv[30m [34mstringr[30m 1.4.0
+[32mv[30m [34mreadr  [30m 1.4.0     [32mv[30m [34mforcats[30m 0.5.1
+[32mv[30m [34mpurrr  [30m 0.3.4     [39m
+"
+"2","package ‘tibble’ was built under R version 4.0.5"
+"2","package ‘tidyr’ was built under R version 4.0.5"
+"2","package ‘readr’ was built under R version 4.0.5"
+"2","package ‘purrr’ was built under R version 4.0.5"
+"2","package ‘dplyr’ was built under R version 4.0.5"
+"2","package ‘stringr’ was built under R version 4.0.5"
+"2","package ‘forcats’ was built under R version 4.0.5"
+"2","[30m-- [1mConflicts[22m ----------------------------------------------------------------- tidyverse_conflicts() --
+[31mx[30m [34mdplyr[30m::[32mcombine()[30m  masks [34mrandomForest[30m::combine()
+[31mx[30m [34mtidyr[30m::[32mexpand()[30m   masks [34mreshape[30m::expand()
+[31mx[30m [34mdplyr[30m::[32mfilter()[30m   masks [34mstats[30m::filter()
+[31mx[30m [34mdplyr[30m::[32mlag()[30m      masks [34mstats[30m::lag()
+[31mx[30m [34mggplot2[30m::[32mmargin()[30m masks [34mrandomForest[30m::margin()
+[31mx[30m [34mdplyr[30m::[32mrename()[30m   masks [34mreshape[30m::rename()[39m
+"
+"0","library(readxl)"
+"2","package ‘readxl’ was built under R version 4.0.5"
+"0","library(data.table)"
+"2","package ‘data.table’ was built under R version 4.0.5"
+"2","data.table 1.14.0 using 4 threads (see ?getDTthreads).  Latest news: r-datatable.com
+"
+"2","
+Attaching package: ‘data.table’
+
+"
+"2","The following objects are masked from ‘package:dplyr’:
+
+    between, first, last
+
+"
+"2","The following object is masked from ‘package:purrr’:
+
+    transpose
+
+"
+"2","The following object is masked from ‘package:reshape’:
+
+    melt
+
+"

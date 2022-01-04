@@ -1,0 +1,10 @@
+"0","```r
+getCensus(
+  name = 'acs/acs5',
+  vars = c('NAME', 'B02001_001E'),
+  region = 'tract:*',
+  vintage = 2009,
+  regionin = 'state:06'
+)
+
+```"

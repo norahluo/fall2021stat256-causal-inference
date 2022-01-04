@@ -1,0 +1,1151 @@
+---
+title: "direct_demand_model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(gmodels)
+```
+
+
+###### THIS SECTION CREATE AND SAVE THE ALL-VARIABLE DATASET FOR FUTURE DIRECT DEMAND MODELING ###### 
+###### DON'T RUN THIS SECTION AGAIN ######
+
+```{r merge census and the other variables}
+census1116 <- read.csv('../data/PSIP3_Across20112016/census1116.csv')[,-c(1,18:20,27:32)]
+AnnualEst <- read.csv('../data/PSIP3_Across20112016/PSIP3_DirectDemand_NewAnnualEst.csv') 
+AnnualEst <- AnnualEst[,c(2:5, 8:23, 26:28, 30:63)]   
+alldata <- merge(AnnualEst, census1116, by = 'ID')
+alldata$logAnnual <- log(alldata$Annual + 0.001)
+```
+
+```{r log transformation}
+for (i in names(alldata[, c(17:93)])){
+        if(is.integer(alldata[[i]]) & !(i %in% c('StSegH', 'StSegQ', 'StSegT', 'EmpH', 'EmpQ', 'EmpT'))) next
+        ifelse(alldata[[i]]>0, alldata[[paste('log',i,sep='')]] <- log(alldata[[i]]),
+                alldata[[paste('log', i, sep='')]] <- log(alldata[[i]] + 0.001))
+}
+```
+
+
+```{r export all variables}
+write.csv(alldata, '../data/PSIP3_Across20112016/PSIP3_allvars_20200725.csv')
+```
+
+### UPDATE EMPLOYMENT VARIABLES ###
+```{r investigate the relationship between old and new employment data}
+library(dplyr)
+sample_oldvar <- read.csv('../data/PSIP3_Across20112016/PSIP3_allvars_20200725.csv')[,-1]
+sample_newvar <- read.csv('../data/PSIP3_Across20112016/PSIP3vars_sample_20210819.csv') %>% filter(ID %in% sample_oldvar$ID) 
+scope_newvar <- read.csv('../data/scope/PSIP3vars_scope_20210819.csv')
+scope_oldvar <- read.csv('../data/scope/PSIP_predict_20200414.csv')
+
+cor(sample_newvar$EmpH, sample_oldvar$EmpH)
+cor(sample_newvar$EmpQ, sample_oldvar$EmpQ)
+cor(sample_newvar$EmpT, sample_oldvar$EmpT)
+
+cor(scope_newvar$EmpT, scope_oldvar$EmpT)
+```
+
+```{r update variables}
+sample_newvar <- read.csv('../data/PSIP3_Across20112016/PSIP3vars_sample_20210819.csv')
+scope_newvar <- read.csv('../data/scope/PSIP3vars_scope_20210819.csv')
+scope <- read.csv('../data/scope/PSIP_predict_20200414.csv')
+sample <- read.csv('../data/PSIP3_Across20112016/PSIP3_allvars_20200725.csv')[,-1]
+
+library(dplyr)
+sample_newvar <- sample_newvar %>% 
+                rename(EmpSF_T = EmpSQFTT, EmpSF_Q = EmpSQFTQ, EmpSF_H = EmpSQFTH)
+
+scope_newvar <- scope_newvar %>% 
+        rename(EmpSF_T = EmpSQFTT, EmpSF_Q = EmpSQFTQ, EmpSF_H = EmpSQFTH, 
+               Precip05in = RainOver05, Precip1in = RainOver1, Snow10in = SnowOver10, Temp90 = DaysOver90)
+
+for (i in colnames(sample_newvar[, c(3:8)])) {
+        ifelse(sample_newvar[[i]] > 0, sample_newvar[[paste('log', i, sep = '')]] <- log(sample_newvar[[i]]), sample_newvar[[paste('log', i, sep='')]] <- log(sample_newvar[[i]] + 0.001))
+}
+sample <- merge(sample[,-c(46:51, 114:119)], sample_newvar[, c(1, 3:14)], by = 'ID')
+write.csv(sample, '../data/PSIP3_Across20112016/PSIP3_allvars_20210826.csv')
+
+for (i in colnames(scope_newvar[, c(3:8)])) {
+        ifelse(scope_newvar[[i]] > 0, scope_newvar[[paste('log', i, sep = '')]] <- log(scope_newvar[[i]]), scope_newvar[[paste('log', i, sep='')]] <- log(scope_newvar[[i]] + 0.001)) 
+}
+
+scope <- merge(scope[,-c(52,53,95,96)], scope_newvar[, -2], by.x = 'FID', by.y = 'ID')
+write.csv(scope, '../data/scope/PSIP_predict_20200826.csv')
+```
+
+```{r update slope variable 20210914}
+library(dplyr)
+sample_newslope <- read.csv('../data/scope/PSIP3slope_sample_20210909.csv')[,-1]
+sample <- read.csv('../data/PSIP3_Across20112016/PSIP3_allvars_20210826.csv')[,-1]
+sample_newslope <- sample_newslope %>% rename(MaxSlope2021 = slope_max, MeanSlope2021 = slope_mean)
+sample <- sample %>% merge(sample_newslope, by = 'ID') # lost 9 locations #
+
+# compare the distribution of max slope between new and old data, the new maximum is higher than the old maximum
+summary(sample$MaxSlope2021)
+summary(sample$MaxSlope)
+boxplot(sample$MaxSlope2021, sample$MeanSlope2021, sample$MaxSlope, names = c('new max slope', 'new avg slope', 'old max slope'))
+plot(sample$MaxSlope2021, sample$MaxSlope)
+abline(a = 0, b = 1)
+# check correlation between new old data.
+cor(sample$MaxSlope, sample$MeanSlope2021)
+cor(sample$MaxSlope, sample$MaxSlope2021)
+
+# create log transformation for slope variables and plot the relationship between logAnnual & slope
+library(ggplot2)
+library(ggpubr)
+for (i in c('MaxSlope2021', 'MeanSlope2021')) {
+        ifelse(sample[[i]] > 0, sample[[paste('log', i, sep = '')]] <- log(sample[[i]]), sample[[paste('log', i, sep='')]] <- log(sample[[i]] + 0.001))
+        
+        plt <- ggplot(data = sample) +
+                geom_point(mapping = aes_string(x = i, y = 'logAnnual')) +
+                labs(x=i, y='LogAnnual Estimate', 
+                     title = paste('Log Annual-', i, sep = ''))
+        
+        plt2 <- ggplot(data = sample) +
+                geom_point(mapping = aes_string(x = paste('log',i,sep=''), y = 'logAnnual')) +
+                labs(x=paste('log',i,sep=''), y='LogAnnual Estimate', 
+                     title = paste('Log Annual-', paste('log',i,sep=''), sep = ''))
+        
+        allplot <- ggarrange(plt, plt2, nrow = 1, ncol = 2)
+        
+        ggsave(filename = paste('LogAnnual-', i, '.jpg', sep = ''), plot = allplot, path = '../output/plots', width = 8, height = 6)
+}
+
+
+write.csv(sample, '../data/PSIP3_Across20112016/PSIP3_allvars_20210914.csv')
+
+```
+
+
+### Update TransComPct 20211006 ###
+```{r}
+scope <- read.csv('../data/scope/PSIP_predict_20200826.csv')[,-1]
+TransComPct <- read.csv('../data/scope/TransComPct_recalculate_20211006.csv')[,-1]
+
+for (i in colnames(TransComPct[, c(2:4)])) {
+        ifelse(TransComPct[[i]] > 0, TransComPct[[paste('log', i, sep = '')]] <- log(TransComPct[[i]]), TransComPct[[paste('log', i, sep='')]] <- log(TransComPct[[i]] + 0.001)) 
+}
+
+scope <- merge(subset(scope, select=-c(TransComPctH,TransComPctQ,TransComPctT,logTransComPctH,logTransComPctQ,logTransComPctT)), TransComPct, by = 'FID')
+
+write.csv(scope, '../data/scope/PSIP_predict_20201006.csv')
+```
+
+###### END OF SECTION ######
+
+DIRECT DEMAND MODELING
+
+```{r load data}
+SHS <- read.csv('../data/PSIP3_NormalizedTo2016/PSIP_allvars_20200503_wSHS_newFC.csv')
+SHS$SHS[is.na(SHS$SHS)] <- 0
+alldata <- read.csv( '../data/PSIP3_Across20112016/PSIP3_allvars_20210826.csv')[,-c(1)]
+alldata <- merge(alldata, SHS[,c('ID', 'SHS')], by = 'ID')
+subdata <- alldata[alldata$Annual > 0, ] # Remove 33 locations with 0 annual count
+sampleSHS <- subset(subdata, SHS == 1)
+scope <- read.csv('../data/scope/PSIP_predict_20201006.csv')[,-1]
+
+```
+
+```{r}
+library(readxl)
+zero_count_loc <- alldata[alldata$Annual == 0, ]
+raw_count <- read_excel('../../Expansion Factor/expansion factor r project/data/hourly_count/Pedestrian_Count_Reformatted.xlsx')
+raw_count[raw_count$ID %in% zero_count_loc$ID, 'Pedestrian Count'] == 0
+
+colors <- c('All sample' = 'red', 'Zero count locations' = 'green')
+ggplot() +
+        geom_density(aes(alldata$logPopQ, color = 'All sample')) +
+        geom_density(aes(zero_count_loc$logPopQ, color = 'Zero count locations')) +
+        scale_colour_manual(values = colors) 
+
+ggplot() +
+        geom_density(aes(alldata$logHseHldQ, color = 'All sample')) +
+        geom_density(aes(zero_count_loc$logHseHldQ, color = 'Zero count locations')) +
+        scale_colour_manual(values = colors) 
+```
+
+
+# EDA 
+
+## Distribution of dependent variables
+Distribution of Annual count (remove 0 count locations) approximates lognormal, annual volumne ranges from 0 to 25,791,215; We see over-dispersion of Annual estimation, which means if we would like to use count model, models that deal with over-dispersion like quasi-poisson or negative binomial should be considered.
+```{r, plot distribution of dependent variables}
+
+plot(density(alldata$Annual))
+plot(density(alldata$logAnnual))
+# Exclude zero count locations, the distribution approximates log normal
+plot(density(alldata[alldata$logAnnual > 0, c('logAnnual')]))
+
+summary(alldata$Annual)
+summary(alldata$logAnnual)
+cat(sprintf("The mean of Annual is: %f, the variance is: %f", mean(subdata$Annual), var(subdata$Annual)))
+
+boxplot(alldata$logAnnual, alldata[alldata$Annual > 0, c('logAnnual')], names = c('Whole Sample', 'Exclude Zero Count'))
+```
+
+## Suspective records
+
+## 1) Zero count locations
+Fischer6755 should not have zero count as it's within a residential area. 
+```{r, investiage zero count locations}
+alldata[alldata$Annual == 0,][c('ID', 'year', 'Annual', 'AnnualEst', 'Intersection', 'City', 'County', 'Latitude', 'Longitude', 'PopH', 'HseHldH')]
+```
+
+## 2) Record with NA 
+```{r, record with NA values}
+alldata[rowSums(is.na(alldata))>0,]  
+```
+
+## Relationship between dependent and independent variables 
+
+###### GENERATE SCATTER PLOT BETWEEN DEPENDENT AND INDEPENDENT VARIABLES ######
+###### NO NEED TO RUN AGAIN ######
+
+## 1) Scatter plots
+```{r scatter}
+library(ggplot2)
+library(ggpubr)
+for (i in names(alldata[c(17:93)])) {
+        if (is.integer(alldata[[i]]) & !(i %in% c('StSegH', 'StSegQ', 'StSegT', 'EmpH', 'EmpQ', 'EmpT'))) next
+        plt <- ggplot(data = alldata) +
+                geom_point(mapping = aes_string(x = i, y = 'logAnnual')) +
+                labs(x=i, y='LogAnnual Estimate', 
+                     title = paste('Log Annual-', i, sep = ''))
+        
+        plt2 <- ggplot(data = alldata) +
+                geom_point(mapping = aes_string(x = paste('log',i,sep=''), y = 'logAnnual')) +
+                labs(x=paste('log',i,sep=''), y='LogAnnual Estimate', 
+                     title = paste('Log Annual-', paste('log',i,sep=''), sep = ''))
+        
+        allplot <- ggarrange(plt, plt2, nrow = 1, ncol = 2)
+        
+        ggsave(filename = paste('LogAnnual-', i, '.jpg', sep = ''), plot = allplot, path = '../output/plots', width = 8, height = 6)
+}
+
+
+for (i in c('EmpH', 'EmpQ', 'EmpT', 'EmpSF_H', 'EmpSF_Q', 'EmpSF_T')) {
+        plt <- ggplot(sample) +
+                geom_point(aes_string(x = i, y = 'logAnnual')) +
+                labs(x = i, y = 'logAnnual Estimate', title = paste('logAnnual-', i, sep = ''))
+        plt2 <- ggplot(sample) +
+                geom_point(aes_string(x = paste('log', i, sep=''), y = 'logAnnual')) +
+                labs(x=paste('log',i), y='logAnnual Estimate', title = paste('logAnnual-', paste('log', i, sep=''), sep=''))
+        allplot <- ggarrange(plt, plt2, nrow = 1, ncol = 2)
+        ggsave(filename = paste('logAnnual-', i, '-newvar.png', sep=''), plot = allplot, path = '../output/plots', width = 8, height = 6)
+}
+```
+
+## 2) Correlation matrix
+```{r, correlation matrix}
+corr <- cor(x= subdata[, 17:161],y= NULL, use = "complete.obs", method = 'pearson')
+write.csv(data.frame(corr[c('logAnnual'),]), '../output/data/pearsonCorr2.csv')
+cor(x = subdata$WhiteH, y = subdata$PopH)
+```
+
+###### END OF SECTION ######
+
+```{r, for cross validation}
+library(caret)
+cv_kfold <- function(k, data, f, fml) {
+        train_err <- list()
+        test_err <- list()
+        flds <- createFolds(data, k = k, list = TRUE, returnTrain = TRUE)
+         for (i in c(1:k)) {
+             train = data[flds[[i]],]
+             test = data[-flds[[i]],]
+             mld <- glm(formula = f, data = train, family = fml)
+             train_err[[i]] <- sum((train$Annual - exp(predict(mld, train)))^2)
+             test_err[i] <- sum((test$Annual - exp(predict(mld, test)))^2)
+         }
+        cat(sprintf('Train set RSS: %.2e, Test set RSS: %.2e\n', mean(unlist(train_err)), mean(unlist(test_err))))
+}
+
+cv_kfold_w <- function(k, data, f, fml, weights) {
+        train_err <- list()
+        test_err <- list()
+        flds <- createFolds(data, k = k, list = TRUE, returnTrain = TRUE)
+         for (i in c(1:k)) {
+             train = data[-flds[[i]],]
+             test = data[flds[[i]],]
+             w = weights[-flds[[i]]]
+             mld <- glm(formula = Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT, data = train, family = fml, weights = w) # explicitly write out the formula so that glm function won't get confused about its environment
+             train_err[[i]] <- sum((train$Annual - exp(predict(mld, train)))^2)
+             test_err[i] <- sum((test$Annual - exp(predict(mld, test)))^2)
+         }
+        cat(sprintf('Train set RSS: %.2e, Test set RSS: %.2e\n', mean(unlist(train_err)), mean(unlist(test_err))))
+}
+```
+
+# Log-linear Model
+```{r}
+library(glmnet)
+matrix = data.matrix(subdata[, c('PopH', 'logHseHldH', 'logTransComT', 'logWalkComH', 'logHighEduH', 'logNoVehH', 
+                                          'WhitePctT', 'logTransComPctH', 'WalkComPctH', 'HighEduPctT', 'NoVehPctH', 
+                                          'PrincArt', 'MinorArt', 'Collector', 'Int4way', 'Signal', 
+                                          'StMetersH', "logStSegH", 
+                                          #"AllTransitH", 'logJobs30T', 'logCommutersQ', 'logTripswkT', 'logRoutesT', 
+                                          'logEmpSF_H', 'logEmpH',
+                                          'Precip05in',
+                                          'logSnow10in',
+                                          "Temp90", 
+                                          'SchoolsH', 
+                                          'MaxSlope')])
+cv = cv.glmnet(matrix, y = subdata$logAnnual)
+coef_ = coef(cv, s='lambda.1se')
+coef_
+cv$lambda
+plot(cv)
+print(cv)
+```
+
+```{r}
+coef_ <- list()
+count_ <- rep(0,29)
+for (i in 1:1000) {
+       cv = cv.glmnet(matrix, y = subdata$logAnnual)
+       coefficient <- coef(cv, s = 'lambda.1se')
+       coef_[[i]] <- coefficient
+       count_ <- count_ + (coefficient != 0)
+}
+```
+
+```{r}
+count_[count_[,1] > 0,]
+count_
+```
+
+```{r}
+loglinear <- lm(logAnnual~logHseHldH + WhitePctT + logTransComPctH + logWalkComPctH +  
+                          PrincArt + MinorArt + Collector + Int4way + Signal + 
+                          logStSegH + 
+                          AllTransitH +  
+                          logEmpQ + 
+                          Temp90 + 
+                          SchoolsH + MaxSlope +
+                          year, data = subdata)
+summary(loglinear)
+car::vif(loglinear)      
+```
+
+
+# Quasi-poisson Model
+
+```{r}
+ggplot() +
+        geom_point(mapping = aes_string(x = exp(predict(quasipoisson4, subdata)), y =(subdata$Annual - exp(predict(quasipoisson4, subdata)))^2)) +
+        xlim(0, 2*10^6) +
+        ylim(0, 2*10^9)
+```
+
+```{r}
+library(glmnet)
+matrix = data.matrix(subdata[, c('PopH', 'logHseHldH', 'logTransComT', 'logWalkComH', 'logHighEduH', 'logNoVehH', 
+                                          'WhitePctT', 'logTransComPctH', 'WalkComPctH', 'HighEduPctT', 'NoVehPctH', 
+                                          'PrincArt', 'MinorArt', 'Collector', 'Int4way', 'Signal', 
+                                          'StMetersH', "logStSegH", 
+                                          #"AllTransitH", 'logJobs30T', 'logCommutersQ', 'logTripswkT', 'logRoutesT', 
+                                          'logEmpSF_H', 'logEmpH',
+                                          'Precip05in',
+                                          'logSnow10in',
+                                          "Temp90", 
+                                          'SchoolsH', 
+                                          'MaxSlope')])
+cv = cv.glmnet(matrix, y = subdata$logAnnual, family = quasipoisson(link='log'))
+coef_ = coef(cv, s='lambda.1se')
+coef_
+cv$lambda
+plot(cv)
+print(cv)
+```
+
+```{r}
+library(doParallel)
+library(snow)
+workers = makeCluster(4, type = 'SOCK')
+registerDoParallel(workers)
+
+# https://stackoverflow.com/questions/40426115/how-to-use-domc-under-windows-or-alternative-parallel-processing-implementation
+
+coef_ <- list()
+count_ <- rep(0,24)
+for (i in 1:1000) {
+       cv = cv.glmnet(matrix, y = subdata$logAnnual, family = quasipoisson(link = 'log'), parallel = TRUE)
+       coefficient <- coef(cv, s = 'lambda.1se')
+       coef_[[i]] <- coefficient
+       count_ <- count_ + (coefficient != 0)
+}
+```
+
+```{r}
+count_[count_[,1] > 0,]
+count_
+```
+
+## version 4: with new values for Slope: max, mean
+1) bp-test: test for heteroskedasticity
+null hypothesis of homoskedasticity:  
+        $$\sigma_i = \sigma  \ \ for \ \ i = 1, 2, ...N$$
+The OLS estimator is unbiased, consistent, and asymptotically normal despite heteroskedasticity. It is inefficient, but the optimal estimator may be unavailable to us. It sounds like heteroskedasticity is not such a big problem. It isn’t—unless we want to draw inferences and test hypotheses.
+```{r}
+# want to see if the high volume predicted by quasi-poisson originated from the new employment data. Result: it's not. 
+
+#scope_old <- read.csv('../data/scope/PSIP_predict_20200414.csv') # dataset with previous employment data
+#scope_old <- merge(scope_old, scope_newvar[,c(1,13)], by.x = 'FID', by.y = 'ID')
+```
+
+############################
+```{r}
+### transform variables for sample
+subdata$PopH_20k <- pmin(subdata$PopH,20000)
+subdata$logStSegHw <- log(subdata$StSegH*(1+(subdata$StSegT/subdata$StSegH)))
+subdata$logStSegQw <- log(subdata$StSegQ*(1+(subdata$StSegT/subdata$StSegQ)))
+subdata$logEmpQw <- log((subdata$EmpQ+1)*(1+(subdata$EmpT/(subdata$EmpQ+1))))
+subdata$logSchoolsH <- log(subdata$SchoolsH + 0.001)
+
+### transform variables for the scope
+scope$PopH_20k <- pmin(scope$PopH,20000)
+scope$logStSegHw <- log(scope$StSegH*(1+(scope$StSegT/scope$StSegH)))
+scope$logStSegQw <- log(scope$StSegQ*(1+(scope$StSegT/scope$StSegQ)))
+scope$logEmpQw <- log((scope$EmpQ+1)*(1+(scope$EmpT/(scope$EmpQ+1))))
+scope$logSchoolsH <- log(scope$SchoolsH + 0.001)
+scope$logStSegH <- log(scope$StSegH)
+
+cat(sprintf('There are %d (%.f%%) SHS locations in the sample', sum(subdata$SHS == 1), sum(subdata$SHS == 1)/nrow(subdata)*100))
+```
+
+```{r, log-linear model for psip2}
+log <- lm(logAnnual~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+            ,data=subdata)
+# check significance
+summary(log) 
+# check goodness of fit
+plot(log)
+# check vif, indicating collinearity between covariates
+car::vif(log) 
+round(cov2cor(vcov(log)), 3)
+# test non-constant error variance: heteroskedasticity
+bptest(log)
+# check model performance
+cat(sprintf('Residual sum of squares for quasi-poisson is: %.2e\n', sum((exp(predict(log, subdata)) - subdata$Annual)^2)))
+#cat(sprintf('Residual sum of squares for sample SHS is: %.2e', sum((exp(predict(log, sampleSHS)) - sampleSHS$Annual)^2)))
+
+
+#summary(exp(predict(log, scope)))
+#quantile(exp(predict(log, scope)), 0.995, na.rm = TRUE)
+
+```
+
+```{r, quasi-poisson model with psip2 variables}
+poisson <- glm(Annual~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+            ,data=subdata, family='quasipoisson')
+# check significance
+summary(poisson)
+# check goodness-of-fit
+plot(poisson)
+bptest(poisson)
+# check vif, collinearity between covariates
+car::vif(poisson)
+round(cov2cor(vcov(poisson)), 3)
+# test non-constant error variance (?)
+bptest(poisson)
+# check model performance
+cat(sprintf('Residual sum of squares for quasi-poisson is: %.2e\n', sum((exp(predict(poisson, subdata)) - subdata$Annual)^2)))
+#cat(sprintf('Residual sum of squares for sample SHS is: %.2e', sum((exp(predict(poisson, sampleSHS)) - sampleSHS$Annual)^2)))
+
+```
+
+
+```{r variable transformation}
+subdata$logHseHldHw <- log(subdata$HseHldH * (1+subdata$HseHldQ/subdata$HseHldH))
+subdata$logHseHldH2 <- (subdata$logHseHldH)^2
+subdata$WalkComPctHw <- subdata$WalkComPctH * (1+subdata$WalkComPctQ/(subdata$WalkComPctH+0.001))
+subdata$StMetersHw <- subdata$StMetersH * (1+subdata$StMetersQ/subdata$StMetersH)
+subdata$sig_4way <- subdata$Int4way * subdata$Signal
+subdata$logEmpHw <- log((subdata$EmpH+1) * (1+subdata$EmpT/(subdata$EmpH+1)))
+```
+
+
+```{r}
+library(lmtest)
+#quasipoisson4 <- glm(Annual~PopH_20k + logTransComPctH + WalkComPctHw + 
+#                          PrincArt + sig_4way + 
+#                          logEmpH + 
+#                          Temp90  
+#                           , family = 'quasipoisson', data = subdata)
+
+quasipoisson4 <- glm(Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT   
+                           , family = 'quasipoisson', data = subdata)
+
+
+quasipoisson4_alt <- glm(Annual~logHseHldHw + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT   
+                           , family = 'quasipoisson', data = subdata)
+
+# check significance
+summary(quasipoisson4)
+# check goodness-of-fit
+plot(quasipoisson4)
+# check vif, collinearity between covariates
+car::vif(quasipoisson4) 
+round(cov2cor(vcov(quasipoisson4)), 3)
+# test non-constant error variance: heteroskedasticity
+bptest(quasipoisson4)
+# check model performance
+cat(sprintf('Residual sum of squares for sample is: %.2e\n', sum((exp(predict(quasipoisson4, subdata)) - subdata$Annual)^2)))
+cat(sprintf('Residual sum of squares for sample SHS is: %.2e', sum((exp(predict(quasipoisson4, sampleSHS)) - sampleSHS$Annual)^2)))
+
+anova(quasipoisson4, quasipoisson4_alt, test = 'F')
+
+```
+
+# Question: can we assume the SHS locations within the sample is a random draw from the population?
+# No, 
+```{r}
+t.test(sampleSHS$logEmpT, scope$logEmpT)
+t.test(sampleSHS$EmpT, scope$EmpT)   
+
+t.test(sampleSHS$logTransComPctH, scope$logTransComPctH) # Not significant different
+t.test(sampleSHS$TransComPctH, scope$TransComPctH) 
+
+t.test(sampleSHS$logHseHldH, scope$logHseHldH)
+t.test(sampleSHS$HseHldH, scope$HseHldH) # Not significant different
+        
+t.test(sampleSHS$WalkComPctH, scope$WalkComPctH)
+```
+
+# For all variables in the model, the sample distribution is different from that of the scope
+```{r, t-test for variables in the model, check if sample is representative of scope}
+
+boxplot(subdata$logTransComPctH, sampleSHS$logTransComPctH, scope$logTransComPctH, names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of logTransComPctH')
+boxplot(subdata$TransComPctH, sampleSHS$TransComPctH, scope$TransComPctH, ylim = c(0,1), names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of TransComPctH')
+t.test(subdata$logTransComPctH, scope$logTransComPctH)
+t.test(subdata$TransComPctH, scope$TransComPctH)
+
+
+boxplot(subdata$logHseHldH, sampleSHS$logHseHldH, scope$logHseHldH, names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of logHseHldH')
+boxplot(subdata$HseHldH, sampleSHS$HseHldH, scope$HseHldH, names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of HseHldH')
+t.test(subdata$logHseHldH, scope$logHseHldH)
+t.test(subdata$HseHldH, scope$HseHldH)
+
+
+boxplot(subdata$WalkComPctH, sampleSHS$WalkComPctH, scope$WalkComPctH, names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of WalkComPctH')
+t.test(subdata$WalkComPctH, scope$WalkComPctH)
+
+boxplot(subdata$logEmpT, sampleSHS$logEmpT, scope$logEmpT, names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of logEmpT')
+boxplot(subdata$EmpT, sampleSHS$EmpT, scope$EmpT, names = c('sample', 'sample SHS', 'scope'), main = 'Distribution of EmpT', ylim = c(0, 4000))
+t.test(subdata$logEmpT, scope$logEmpT)
+t.test(subdata$EmpT, scope$EmpT)
+
+```
+
+# The new quasipoisson performed the best :) Yeah!
+# Tried different weighted transformation of the variables, but the performance didn't improve in terms of RSS. Thus just use the original form
+```{r, cross validation error}
+f <- 'Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT'
+cv_kfold(k = 10, data = subdata, f, 'quasipoisson')
+
+f <- 'Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT'
+cv_kfold(k = 10, data = subdata, f, 'quasipoisson')
+
+f <- 'Annual~logEmpQw + PopH_20k + logStSegHw +
+             WalkComPctH + logSchoolsH +
+             PrincArt + MinorArt + Int4way'
+cv_kfold(k = 10, data = subdata, f, 'quasipoisson')
+
+f <- 'logAnnual~logEmpQw + PopH_20k + logStSegHw +
+             WalkComPctH + logSchoolsH +
+             PrincArt + MinorArt + Int4way'
+cv_kfold(k = 10, data = subdata, f, 'gaussian')
+```
+# Use the 25%, 50%, 75% quantile of sample as the cutting points
+```{r}
+summary(subdata$EmpT)
+summary(scope$EmpT)
+
+summary(subdata$TransComPctH)
+summary(scope$TransComPctH)
+
+summary(subdata$HseHldH)
+summary(scope$HseHldH)
+
+summary(subdata$WalkComPctH)
+summary(scope$WalkComPctH)
+
+summary(subdata$StSegH)
+summary(scope$StSegH)
+
+summary(subdata$NoVehPctH)
+summary(scope$NoVehPctH)
+
+summary(subdata$PopH)
+summary(scope$PopH)
+```
+# hsehldH, EmpT, TransComPctH are identified as the variables that distinguish scope and sample locations
+```{r}
+library(gmodels)
+hsehldseg <- c(-1, 600, 1200, 2300, 30000)
+wcpseg <- c(-1, 0.012, 0.027, 0.052, 1)
+tcpseg <- c(-1, 0.006, 0.02, 0.06, 1)
+empseg <- c(-1,40, 155, 360, 13000)
+stsgseg <- c(-1, 180, 284, 385, 1200)
+popseg <- c(-1, 1500, 3500, 7000, 50000)
+
+h1 <- cut(scope$HseHldH, breaks = hsehldseg)
+w1 <- cut(scope$WalkComPctH, breaks = wcpseg)
+e1 <- cut(scope$EmpT, breaks = empseg)
+t1 <- cut(scope$TransComPctH, breaks = tcpseg)
+s1 <- cut(scope$StSegH, breaks = stsgseg)
+p1 <- cut(scope$PopH, breaks = popseg)
+
+h2 <- cut(subdata$HseHldH, breaks = hsehldseg)
+w2 <- cut(subdata$WalkComPctH, breaks = wcpseg)
+e2 <- cut(subdata$EmpT, breaks = empseg)
+t2 <- cut(subdata$TransComPctH, breaks = tcpseg)
+s2 <- cut(subdata$StSegH, breaks = stsgseg)
+p2 <- cut(subdata$PopH, breaks = popseg)
+```
+
+
+# Locations in the scope have fewer household units around (sparser), with less people commute with transit, and fewer people employed. HseHldH & TransComPctH has high correlation. Locations with more household units around is in a denser area, and has a higher probability in downtown or other urban area, where transit is easier to access, more businesses are around and the walking envrionment is more pedestrian-friendly.
+```{r}
+cor(subdata$HseHldH, subdata$EmpT)
+cor(subdata$HseHldH, subdata$StSegH)
+cor(subdata$HseHldH, subdata$TransComPctH)
+cor(subdata$HseHldH, subdata$WalkComPctH)
+
+cor(subdata$TransComPctH, subdata$WalkComPctH)
+cor(subdata$TransComPctH, subdata$StSegH)
+cor(subdata$WalkComPctH, subdata$StSegH)
+cor(subdata$EmpT, subdata$TransComPctH)
+
+cor(subdata$PopH, subdata$StSegH)
+```
+
+```{r}
+weighted_result <- function(weight){
+       f <- 'Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT'
+        quasipoisson4_w <-glm(f , family = 'quasipoisson', data = subdata, weights = ws)
+        print(summary(quasipoisson4_w))
+
+        cv_kfold_w(k = 10, data = subdata, f = f, fml = 'quasipoisson', w = ws)
+
+        boxplot(exp(predict(quasipoisson4, scope)), exp(predict(quasipoisson4_w, scope)), names = c('unweighted', 'weighted'), ylim = c(0, 2*10^6))
+
+        ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson4, scope)), y = exp(predict(quasipoisson4_w, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'unweighted', y = 'weighted') +
+                xlim(0, 2*10^6) +
+                ylim(0, 2*10^6) 
+}
+
+```
+
+
+
+
+
+```{r}
+xtabp <- CrossTable(h1, s1, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+xtabs <- CrossTable(h2, s2, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+ratio <- xtabp$prop.tbl/xtabs$prop.tbl
+
+ws <- rep(1, nrow(subdata))
+
+h2 <- as.numeric(h2)
+s2 <- as.numeric(s2)
+
+for (i in 1:length(ws)) {
+   ws[i] <- ratio[h2[i], s2[i]]     
+}
+
+weighted_result(ws)
+```
+
+
+```{r}
+library(BAMMtools)
+
+summary(subdata$StSegH)
+getJenksBreaks(subdata$StSegH, 5)
+stsgseg1 <- c(-1, 186, 339, 536, 1200)
+s11 <- cut(scope$StSegH, breaks = stsgseg1)
+s21 <- cut(subdata$StSegH, breaks = stsgseg1)
+
+summary(subdata$HseHldH)
+getJenksBreaks(subdata$HseHldH, 5)
+hsehldseg1 <- c(-1, 1903, 5249, 13669, 30000)
+h11 <- cut(scope$HseHldH, breaks = hsehldseg1)
+h21 <- cut(subdata$HseHldH, breaks = hsehldseg1)
+```
+
+
+```{r}
+xtabp <- CrossTable(h11, s11, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+xtabs <- CrossTable(h21, s21, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+ratio <- xtabp$prop.tbl/xtabs$prop.tbl
+
+ws <- rep(1, nrow(subdata))
+
+h21 <- as.numeric(h21)
+s21 <- as.numeric(s21)
+
+for (i in 1:length(ws)) {
+   ws[i] <- ratio[h21[i], s21[i]]     
+}
+
+weighted_result(ws)
+```
+
+
+```{r}
+summary(subdata$StSegH)
+getJenksBreaks(subdata$StSegH, 4)
+stsgseg1 <- c(-1, 240, 446, 1200)
+s11 <- cut(scope$StSegH, breaks = stsgseg1)
+s21 <- cut(subdata$StSegH, breaks = stsgseg1)
+
+summary(subdata$HseHldH)
+getJenksBreaks(subdata$HseHldH, 4)
+hsehldseg1 <- c(-1, 2800, 10000, 30000)
+h11 <- cut(scope$HseHldH, breaks = hsehldseg1)
+h21 <- cut(subdata$HseHldH, breaks = hsehldseg1)
+
+```
+
+```{r}
+xtabp <- CrossTable(h11, s11, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+xtabs <- CrossTable(h21, s21, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+ratio <- xtabp$prop.tbl/xtabs$prop.tbl
+
+ws <- rep(1, nrow(subdata))
+
+h21 <- as.numeric(h21)
+s21 <- as.numeric(s21)
+
+for (i in 1:length(ws)) {
+   ws[i] <- ratio[h21[i], s21[i]]     
+}
+
+weighted_result(ws)
+```
+
+
+```{r}
+library(gmodels)
+stsgseg <- c(-1, 180, 284, 385, 1200)
+popseg <- c(-1, 1500, 3500, 7000, 50000)
+
+#stsgseg <- c(-1, 250, 2000)
+#popseg <- c(-1, 500, 5000, 50000)
+
+s1 <- cut(scope$StSegH, breaks = stsgseg)
+p1 <- cut(scope$PopH, breaks = popseg)
+
+s2 <- cut(subdata$StSegH, breaks = stsgseg)
+p2 <- cut(subdata$PopH, breaks = popseg)
+
+xtabp <- CrossTable(p1, s1, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+xtabs <- CrossTable(p2, s2, prop.chisq = FALSE, prop.r = FALSE, prop.c = FALSE)
+ratio <- xtabp$prop.tbl/xtabs$prop.tbl
+
+ws <- rep(1, nrow(subdata))
+
+p2 <- as.numeric(p2)
+s2 <- as.numeric(s2)
+
+for (i in 1:length(ws)) {
+   ws[i] <- ratio[p2[i], s2[i]]     
+}
+```
+
+```{r}
+ratio
+```
+
+
+```{r}
+library(doParallel)
+library(snow)
+workers = makeCluster(4, type = 'SOCK')
+registerDoParallel(workers)
+
+# https://stackoverflow.com/questions/40426115/how-to-use-domc-under-windows-or-alternative-parallel-processing-implementation
+
+coef_ <- list()
+count_ <- rep(0,24)
+for (i in 1:1000) {
+       cv = cv.glmnet(matrix, y = subdata$logAnnual, family = quasipoisson(link = 'log'), weights = ws, parallel = TRUE)
+       coefficient <- coef(cv, s = 'lambda.1se')
+       coef_[[i]] <- coefficient
+       count_ <- count_ + (coefficient != 0)
+}
+```
+
+```{r}
+count_
+```
+
+```{r}
+quasipoisson4 <- glm(Annual~PopH + logTransComT + 
+                            Int4way + Signal +
+                            logStSegH +
+                            logEmpSF_H + EmpH +
+                            SchoolsH
+                           , family = 'quasipoisson', weights = ws, data = subdata)
+summary(quasipoisson4)
+car::vif(quasipoisson4)
+```
+
+### Compare weighted and unweighted method ###
+```{r, compare weighted and unweighted model}
+
+f <- 'Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT'
+quasipoisson_uw <-glm(f , family = 'quasipoisson', data = subdata)
+
+f <- 'Annual~PopH + logTransComT + 
+            Int4way + Signal +
+            logStSegH +
+            logEmpSF_H + logEmpH +
+            SchoolsH'
+quasipoisson_w <-glm(f , family = 'quasipoisson', data = subdata, weights = ws)
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson_uw, scope)), y = exp(predict(quasipoisson_w, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'unweighted', y = 'weighted') +
+                xlim(0, 2*10^6) +
+                ylim(0, 2*10^6) 
+
+summary(exp(predict(quasipoisson_uw, scope)))
+summary(exp(predict(quasipoisson_w, scope)))
+
+unweight <- exp(predict(quasipoisson_uw, scope))
+weight <- exp(predict(quasipoisson_w, scope))
+ ggplot() + 
+  geom_histogram(aes(x = unweight, fill = 'unweighted', alpha = 0.1)) +
+  geom_histogram(aes(x = weight,fill = 'weighted', alpha = 0.1)) +
+  scale_fill_manual(values = c('skyblue', 'orange'),
+                    name = 'model', labels = c('unweighted', 'weighted')) +
+  theme_classic() +
+  scale_x_log10() +
+  labs(x = "Annual Volume (log scale)", y = 'Count',
+       title = 'Distribution of predicted annual demand'
+               )
+
+```
+```{r}
+f <- 'Annual~logHseHldH + logTransComPctH + WalkComPctH + 
+                          PrincArt + Int4way + Signal +
+                          logEmpT'
+quasipoisson_uw <-glm(f , family = 'quasipoisson', data = subdata)
+
+f <- 'Annual~PopH + logTransComT + 
+            Int4way + Signal +
+            logStSegH +
+            logEmpSF_H + logEmpH +
+            SchoolsH'
+quasipoisson_w <-glm(f , family = 'quasipoisson', data = subdata, weights = ws)
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson_uw, scope)), y = exp(predict(quasipoisson_w, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'unweighted', y = 'weighted') +
+                xlim(0, 2*10^6) +
+                ylim(0, 2*10^6) 
+
+summary(exp(predict(quasipoisson_uw, scope)))
+summary(exp(predict(quasipoisson_w, scope)))
+
+unweight <- exp(predict(quasipoisson_uw, scope))
+weight <- exp(predict(quasipoisson_w, scope))
+ ggplot() + 
+  geom_histogram(aes(x = unweight, fill = 'unweighted', alpha = 0.1)) +
+  geom_histogram(aes(x = weight,fill = 'weighted', alpha = 0.1)) +
+  scale_fill_manual(values = c('skyblue', 'orange'),
+                    name = 'model', labels = c('unweighted', 'weighted')) +
+  theme_classic() +
+  scale_x_log10() +
+  labs(x = "Annual Volume (log scale)", y = 'Count',
+       title = 'Distribution of predicted annual demand'
+               )
+```
+
+
+## Why the prediction produced by weighted and unweighted sample looks similar?
+```{r}
+cv_kfold_w <- function(k, data, f, fml, weights) {
+        train_err <- list()
+        test_err <- list()
+        flds <- createFolds(data, k = k, list = TRUE, returnTrain = TRUE)
+         for (i in c(1:k)) {
+             train = data[-flds[[i]],]
+             test = data[flds[[i]],]
+             w = weights[-flds[[i]]]
+             mld <- glm(formula = Annual ~ PopH + logTransComT + 
+                            Int4way + Signal +
+                            logStSegH +
+                            logEmpSF_H + EmpH +
+                            SchoolsH, data = train, family = fml, weights = w) # explicitly write out the formula so that glm function won't get confused about its environment
+             train_err[[i]] <- sum((train$Annual - exp(predict(mld, train)))^2)
+             test_err[i] <- sum((test$Annual - exp(predict(mld, test)))^2)
+         }
+        cat(sprintf('Train set RSS: %.2e, Test set RSS: %.2e\n', mean(unlist(train_err)), mean(unlist(test_err))))
+}
+
+weighted_result <- function(weight){
+       f <- 'Annual ~ PopH + logTransComT + 
+                            Int4way + Signal +
+                            logStSegH +
+                            logEmpSF_H + EmpH +
+                            SchoolsH'
+        quasipoisson_w <-glm(f , family = 'quasipoisson', data = subdata, weights = ws)
+        print(summary(quasipoisson_w))
+
+        cv_kfold_w(k = 10, data = subdata, f = f, fml = 'quasipoisson', w = ws)
+
+        boxplot(exp(predict(quasipoisson_uw, scope)), exp(predict(quasipoisson_w, scope)), names = c('unweighted', 'weighted'), ylim = c(0, 1.5*10^6), ylab = 'Annual Demand')
+        print(summary(exp(predict(quasipoisson_uw, scope))))
+        print(summary(exp(predict(quasipoisson_w, scope))))
+
+        ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson_uw, scope)), y = exp(predict(quasipoisson_w, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'unweighted', y = 'weighted') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+}
+
+scope$logStSegH <- log(scope$StSegH)
+weighted_result(ws)
+```
+
+```{r, compare between PSIP2 & PSIP3}
+sample_psip2 <- read.csv('../data/PSIP3_NormalizedTo2016/PSIP_allvars_20200503_wSHS_newFC.csv')
+sample_psip2$PopH_20k <- pmin(sample_psip2$PopH,20000)
+sample_psip2$logStSegHw <- log(sample_psip2$StSegH*(1+(sample_psip2$StSegT/sample_psip2$StSegH)))
+sample_psip2$logStSegQw <- log(sample_psip2$StSegQ*(1+(sample_psip2$StSegT/sample_psip2$StSegQ)))
+sample_psip2$logEmpQw <- log((sample_psip2$EmpQ+1)*(1+(sample_psip2$EmpT/(sample_psip2$EmpQ+1))))
+subsample_psip2 <- subset(sample_psip2,logAnnualEst > 0)
+
+loglinear <- lm(logAnnualEst~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+            ,data=subsample_psip2)
+summary(loglinear)
+
+scope$PopH_20k <- pmin(scope$PopH,20000)
+scope$logStSegHw <- log(scope$StSegH*(1+(scope$StSegT/scope$StSegH)))
+scope$logStSegQw <- log(scope$StSegQ*(1+(scope$StSegT/scope$StSegQ)))
+scope$logEmpQw <- log((scope$EmpQ+1)*(1+(scope$EmpT/(scope$EmpQ+1))))
+
+predict_psip2 <- exp(predict(loglinear, scope))
+
+#scope$predict_psip2 <- predict_psip2
+#scope$predict_psip3 <- weight
+#write.csv(scope, '../output/data/PSIP_predict_20211202.csv')
+
+ggplot() + 
+  geom_histogram(aes(x = predict_psip2, fill = 'psip2', alpha = 0.1)) +
+  geom_histogram(aes(x = weight,fill = 'psip3', alpha = 0.1)) +
+  scale_fill_manual(values = c('skyblue', 'orange'),
+                    name = 'model', labels = c('psip2', 'psip3')) +
+  theme_classic() +
+  scale_x_log10() +
+  labs(x = "Annual Volume (log scale)", y = 'Count',
+       title = 'Distribution of predicted annual demand'
+               )
+
+ggplot() +
+                geom_point(aes_string(x=predict_psip2, y = weight)) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'psip2', y = 'psip3') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+```
+
+```{r}
+loglinear2 <- lm(logAnnualEst~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+            ,data=subdata)
+summary(loglinear2)
+
+loglinear3 <- lm(logAnnualEst~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+            ,data=subdata, weights = ws)
+summary(loglinear3)
+
+quasipoisson_oldvar <- glm(Annual~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+                           , family = 'quasipoisson', data = subdata)
+summary(quasipoisson_oldvar)
+
+quasipoisson_w_oldvar <- glm(Annual~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+                           , family = 'quasipoisson', weights = ws, data = subdata)
+summary(quasipoisson_w_oldvar)
+
+nb_oldvar <- MASS::glm.nb(Annual~logEmpQw
+            +PopH_20k
+            +logStSegHw
+            +WalkComPctH
+            +logSchoolsH
+            +PrincArt
+            +MinorArt
+            +Int4way
+                           , data = subdata, weights = ws)
+summary(nb_oldvar)
+```
+# First thing is that use new variables the prediction seems higher; 
+```{r}
+ggplot() + 
+  geom_histogram(aes(x = exp(predict(loglinear, scope)), fill = 'psip2', alpha = 0.1)) +
+  geom_histogram(aes(x = exp(predict(loglinear2, scope)),fill = 'psip3', alpha = 0.1)) +
+  scale_fill_manual(values = c('skyblue', 'orange'),
+                    name = 'model', labels = c('psip2', 'psip3')) +
+  theme_classic() +
+  scale_x_log10() +
+  labs(x = "Annual Volume (log scale)", y = 'Count',
+       title = 'Distribution of predicted annual demand'
+               )
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(loglinear, scope)), y = exp(predict(loglinear2, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'loglinear_olddata', y = 'loglinear_newdata') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(loglinear2, scope)), y = exp(predict(loglinear3, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'loginear_newdata', y = 'loglinear_newdata_w') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(loglinear2, scope)), y = exp(predict(quasipoisson_oldvar, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'loginear_newdata', y = 'quasipoisson_newdata') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(loglinear3, scope)), y = exp(predict(quasipoisson_w_oldvar, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'loglinear_newdata_w', y = 'quasipoisson_newdata_w_oldvar') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson_w_oldvar, scope)), y = exp(predict(quasipoisson_w, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'quasipoisson_newdata_w_oldvar', y = 'quasipoisson_newdata_w_newwar') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+```
+
+```{r}
+ggplot() +
+                geom_point(aes_string(x=exp(predict(loglinear, scope)), y = exp(predict(nb_oldvar, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'loglinear_olddata', y = 'NB_newdata_w') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(loglinear, scope)), y = exp(predict(nb_oldvar, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'loglinear_olddata', y = 'NB_newdata_w') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6)
+
+ggplot() +
+                geom_point(aes_string(x=exp(predict(nb_oldvar, scope)), y = exp(predict(loglinear3, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'NB_newdata_w', y = 'loglinear_newdata_w') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6)
+```
+
+```{r}
+ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson_w_oldvar, scope)), y = exp(predict(loglinear3, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'QP_newdata_w', y = 'loglinear_newdata_w') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+```
+
+```{r}
+ggplot() +
+                geom_point(aes_string(x=exp(predict(quasipoisson_w_oldvar, scope)), y = exp(predict(nb_oldvar, scope)))) +
+                geom_abline(intercept = 0, slope = 1) +
+                labs(x = 'QP_newdata_w', y = 'NB_newdata_w') +
+                xlim(0, 1.5*10^6) +
+                ylim(0, 1.5*10^6) 
+```
+

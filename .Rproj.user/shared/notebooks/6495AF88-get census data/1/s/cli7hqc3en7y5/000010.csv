@@ -1,0 +1,8 @@
+"0",""
+"0","ggplot(mapping = aes(boot.est[!is.na(boot.est)]))+"
+"0","  geom_histogram() +"
+"0","  labs(x = 'Average Causal Effect', "
+"0","       y = 'Count', "
+"0","       title = 'Boostrap result') +"
+"0","  theme("
+"0","        text=element_text(size = 14, family = 'serif', color = 'black'))"

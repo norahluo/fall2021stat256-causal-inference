@@ -1,0 +1,29 @@
+"0","```r
+library(tidycensus)
+```"
+"1","package ã¤¼ã¸±tidycensusã¤¼ã¸² was built under R version 4.0.5
+"
+"0","```r
+library(dplyr)
+```"
+"1","package ã¤¼ã¸±dplyrã¤¼ã¸² was built under R version 4.0.5
+Attaching package: ã¤¼ã¸±dplyrã¤¼ã¸²
+
+The following objects are masked from ã¤¼ã¸±package:statsã¤¼ã¸²:
+
+    filter, lag
+
+The following objects are masked from ã¤¼ã¸±package:baseã¤¼ã¸²:
+
+    intersect, setdiff, setequal, union
+"
+"0","```r
+library(reshape)
+```"
+"1","package ã¤¼ã¸±reshapeã¤¼ã¸² was built under R version 4.0.5
+Attaching package: ã¤¼ã¸±reshapeã¤¼ã¸²
+
+The following object is masked from ã¤¼ã¸±package:dplyrã¤¼ã¸²:
+
+    rename
+"

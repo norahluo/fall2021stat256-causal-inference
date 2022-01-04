@@ -1,0 +1,39 @@
+"0","```r
+loc2014 <- overlap_area[overlap_area$year == 2014,] %>% merge(allvar2016, by = 'GEOID') %>%
+  # Calculate weighted value
+  mutate(
+    PopH = Pop * pctbgH, PopQ = Pop * pctbgQ, PopT = Pop * pctbgT,
+    WhiteH = White * pctbgH, WhiteQ = White * pctbgQ, WhiteT = White * pctbgT,
+    TransComH = TransCom * pctbgH, TransComQ = TransCom * pctbgQ, TransComT = TransCom * pctbgT,
+    WalkComH = WalkCom * pctbgH, WalkComQ = WalkCom * pctbgQ, WalkComT = WalkCom * pctbgT,
+    HseHldH = HseHld * pctbgH, HseHldQ = HseHld * pctbgQ, HseHldT = HseHld * pctbgT,
+    EmpPopH = EmpPop * pctbgH, EmpPopQ = EmpPop * pctbgQ, EmpPopT = EmpPop * pctbgT,
+    HighEduH = HighEdu * pctbgH, HighEduQ = HighEdu * pctbgQ, HighEduT = HighEdu * pctbgT,
+    NoVehH = NoVeh * pctbgH, NoVehQ = NoVeh * pctbgQ, NoVehT = NoVeh * pctbgT,
+    Pop25H = Pop25 * pctbgH, Pop25Q = Pop25 * pctbgQ, Pop25T = Pop25 * pctbgT,
+    UnitsH = Units * pctbgH, UnitsQ = Units * pctbgQ, UnitsT = Units * pctbgT,
+  ) 
+
+
+loc2014 <- aggregate(c(loc2014[,17:46]), by = list(loc2014$count_id), FUN='sum') %>% dplyr::rename(ID = Group.1)
+
+loc2014$WhitePctH <- loc2014$WhiteH/loc2014$PopH
+loc2014$WhitePctQ <- loc2014$WhiteQ/loc2014$PopQ
+loc2014$WhitePctT <- loc2014$WhiteT/loc2014$PopT
+
+loc2014$TransComPctH <- loc2014$TransComH/loc2014$EmpPopH
+loc2014$TransComPctQ <- loc2014$TransComQ/loc2014$EmpPopQ
+loc2014$TransComPctT <- loc2014$TransComT/loc2014$EmpPopT
+
+loc2014$WalkComPctH <- loc2014$WalkComH/loc2014$EmpPopH
+loc2014$WalkComPctQ <- loc2014$WalkComQ/loc2014$EmpPopQ
+loc2014$WalkComPctT <- loc2014$WalkComT/loc2014$EmpPopT
+
+loc2014$HighEduPctH <- loc2014$HighEduH/loc2014$Pop25H
+loc2014$HighEduPctQ <- loc2014$HighEduQ/loc2014$Pop25Q
+loc2014$HighEduPctT <- loc2014$HighEduT/loc2014$Pop25T
+
+loc2014$NoVehPctH <- loc2014$NoVehH/loc2014$UnitsH
+loc2014$NoVehPctQ <- loc2014$NoVehQ/loc2014$UnitsQ
+loc2014$NoVehPctT <- loc2014$NoVehT/loc2014$UnitsT
+```"

@@ -1,0 +1,44 @@
+"0","```r
+var2014 <- var2014[var2014$GEOID %in% unique(overlap_area$GEOID),]
+
+GEOID <- unique(var2014$GEOID)
+n = length(unique(var2014$GEOID))
+Pop <- vector(mode = 'numeric', length = n)
+White <- vector(mode = 'numeric', length = n)
+EmpPop <- vector(mode = 'numeric', length = n)
+TransCom <-vector(mode = 'numeric', length = n)
+WalkCom <- vector(mode = 'numeric', length = n)
+HseHld <- vector(mode = 'numeric', length = n)
+Pop25 <- vector(mode = 'numeric', length = n)
+Bechalor25 <- vector(mode = 'numeric', length = n)
+Master25 <- vector(mode = 'numeric', length = n)
+Doctoral25 <- vector(mode = 'numeric', length = n)
+Units <- vector(mode = 'numeric', length = n)
+NovehOwn <- vector(mode = 'numeric', length = n)
+NovehRent <- vector(mode = 'numeric', length = n)
+
+for (i in 1:n){
+  Pop[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B02001_001', c('estimate')][[1]]
+  White[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B02001_002', c('estimate')][[1]]
+  EmpPop[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B08301_001', c('estimate')][[1]]
+  TransCom[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B08301_010', c('estimate')][[1]]
+  WalkCom[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B08301_019', c('estimate')][[1]]
+  HseHld[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B11001_001', c('estimate')][[1]]
+  Pop25[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B15003_001', c('estimate')][[1]]
+  Bechalor25[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B15003_022', c('estimate')][[1]]
+  Master25[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B15003_023', c('estimate')][[1]]
+  Doctoral25[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B15003_025', c('estimate')][[1]]
+  Units[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B25044_001', c('estimate')][[1]]
+  NovehOwn[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B25044_003', c('estimate')][[1]]
+  NovehRent[i] <- var2014[var2014$GEOID == GEOID[i] & var2014$variable == 'B25044_010', c('estimate')][[1]]
+}
+
+allvar2014 <- data.frame(GEOID, Pop, White, EmpPop, TransCom, WalkCom, HseHld, Pop25, Bechalor25, Master25, Doctoral25, Units, NovehOwn, NovehRent) %>%
+  mutate(
+    NoVeh = NovehOwn + NovehRent,
+    HighEdu = Bechalor25+Master25+Doctoral25
+    ) %>%
+  select(c(GEOID, Pop, White, EmpPop, TransCom, WalkCom, HseHld, HighEdu, NoVeh, Pop25, Units))
+
+
+```"

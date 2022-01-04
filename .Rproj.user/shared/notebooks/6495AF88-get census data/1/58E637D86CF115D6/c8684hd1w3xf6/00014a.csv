@@ -1,0 +1,1 @@
+"0","ggsave('../output/plots/estimated propensity score.png', width = 7, height = 5)"

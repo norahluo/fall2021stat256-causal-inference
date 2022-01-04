@@ -1,0 +1,15 @@
+"0","```r
+allvar2016 <- var2016 %>% select(c('GEOID', 'variable', 'estimate')) %>% 
+            cast(GEOID~variable) 
+```"
+"1","Using estimate as value column.  Use the value argument to cast to override this choice
+"
+"0","```r
+colnames(allvar2016) <- c('GEOID', 'Pop', 'White', 'EmpPop', 'TransCom', 'WalkCom', 'HseHld', 'Pop25', 'Bechalor25', 'Master25', 'Doctoral25', 'Units', 'NovehOwn', 'NovehRent')
+
+allvar2016 <- allvar2016 %>% mutate(
+    NoVeh = NovehOwn + NovehRent,
+    HighEdu = Bechalor25+Master25+Doctoral25
+    ) %>%
+  select(c(GEOID, Pop, White, EmpPop, TransCom, WalkCom, HseHld, HighEdu, NoVeh, Pop25, Units))
+```"

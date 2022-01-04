@@ -1,0 +1,33 @@
+"0","library('ggplot2')"
+"0","library('kml')"
+"2","package ‘kml’ was built under R version 4.0.5"
+"2","Loading required package: clv
+"
+"2","package ‘clv’ was built under R version 4.0.5"
+"2","Loading required package: cluster
+"
+"2","Loading required package: class
+"
+"2","
+Attaching package: ‘class’
+
+"
+"2","The following object is masked from ‘package:reshape’:
+
+    condense
+
+"
+"2","Loading required package: longitudinalData
+"
+"2","package ‘longitudinalData’ was built under R version 4.0.5"
+"2","Loading required package: rgl
+"
+"2","package ‘rgl’ was built under R version 4.0.5"
+"2","Registered S3 method overwritten by 'htmlwidgets':
+  method           from         
+  print.htmlwidget tools:rstudio
+"
+"2","Loading required package: misc3d
+"
+"2","package ‘misc3d’ was built under R version 4.0.5"
+"0","library('nnet')"

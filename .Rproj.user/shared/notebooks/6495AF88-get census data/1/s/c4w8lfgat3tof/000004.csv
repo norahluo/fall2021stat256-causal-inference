@@ -1,0 +1,8 @@
+"0","res.ind <- get_pca_ind(res.pca)"
+"0","data$mobility0818dim1 <- res.ind$coord[,1]   "
+"0","data$mobility0818dim2 <- res.ind$coord[,2]   "
+"0",""
+"0","mobility0825 <- c('retailrec_2021-08-25',  'park_2021-08-25', 'transit_2021-08-25',  'workplace_2021-08-25',  'residential_2021-08-25',  'gropharmacy_2021-08-25')"
+"0",""
+"0","res.pca <- prcomp(data[,mobility0825], scale = TRUE)"
+"0","fviz_eig(res.pca)"
